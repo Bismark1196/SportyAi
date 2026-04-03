@@ -3,10 +3,10 @@ import { verifyToken } from '../../../lib/auth';
 import { getUpcomingFixtures, generateAIPrediction } from '../../../lib/sports-data';
 import prisma from '../../../lib/prisma';
 
-// ✅ Strong types
+// ✅ Shared types
 type PredictionType = 'home_win' | 'away_win' | 'draw' | 'over_2_5' | 'under_2_5';
 
-interface FixtureMatch {
+export interface FixtureMatch {
   id: string;
   homeTeam: string;
   awayTeam: string;
@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  // 🔐 Auth check
+  // 🔐 Auth
   const token = req.cookies['betai_token'];
   if (!token) return res.status(401).json({ message: 'Unauthorized' });
 
@@ -38,14 +38,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!session) return res.status(401).json({ message: 'Unauthorized' });
 
   try {
-    // 📅 Today range
+    // 📅 Date range
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
 
-    // 1️⃣ Get stored predictions
+    // 1️⃣ Check DB first
     const stored = await prisma.prediction.findMany({
       where: {
         isPublished: true,
@@ -55,19 +55,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     if (stored.length > 0) {
-      const stats = await getStats();
       return res.status(200).json({
         predictions: stored,
-        stats,
+        stats: await getStats(),
         source: 'database',
       });
     }
 
     // 2️⃣ Fetch fixtures
-    const { fixtures, source } = await getUpcomingFixtures() as {
-      fixtures: FixtureMatch[];
-      source: string;
-    };
+    const { fixtures, source } = await getUpcomingFixtures();
 
     if (!fixtures || fixtures.length === 0) {
       return res.status(200).json({
@@ -77,24 +73,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // ⚡ Limit for performance
     const matchesToAnalyze = fixtures.slice(0, 8);
 
     // 3️⃣ Generate AI predictions
     const predictionsData = await Promise.all(
-      matchesToAnalyze.map(async (match) => {
-        const ai = (await generateAIPrediction(match)) as AIPrediction;
+      matchesToAnalyze.map(async (match: FixtureMatch) => {
+        const ai = await generateAIPrediction(match);
 
-        // ✅ Safe odds selection
-        let selectedOdds: number | null = null;
+        let odds: number | null = null;
 
         if (match.odds) {
           if (ai.prediction === 'home_win') {
-            selectedOdds = match.odds.home ?? null;
+            odds = match.odds.home ?? null;
           } else if (ai.prediction === 'away_win') {
-            selectedOdds = match.odds.away ?? null;
+            odds = match.odds.away ?? null;
           } else {
-            selectedOdds = match.odds.draw ?? null;
+            odds = match.odds.draw ?? null;
           }
         }
 
@@ -107,7 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           matchDate: new Date(match.matchDate),
           prediction: ai.prediction,
           confidence: ai.confidence,
-          odds: selectedOdds,
+          odds,
           aiAnalysis: ai.analysis,
           result: null,
           isPublished: true,
@@ -115,13 +109,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     );
 
-    // 4️⃣ Save to DB
+    // 4️⃣ Save
     await prisma.prediction.createMany({
       data: predictionsData,
       skipDuplicates: true,
     });
 
-    // 5️⃣ Fetch saved predictions
+    // 5️⃣ Fetch saved
     const saved = await prisma.prediction.findMany({
       where: {
         isPublished: true,
@@ -130,34 +124,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       orderBy: { confidence: 'desc' },
     });
 
-    // 6️⃣ Attach tips (not stored in DB)
+    // 6️⃣ Add tips
     const withTips = saved.map((p, i) => ({
       ...p,
       tips: matchesToAnalyze[i]
         ? [
             'Verify team news before betting',
-            'Check recent form and injuries',
-            'Consider home vs away performance',
+            'Check injuries and suspensions',
+            'Analyze last 5 matches form',
           ]
         : [],
     }));
 
-    const stats = await getStats();
-
     return res.status(200).json({
       predictions: withTips,
-      stats,
+      stats: await getStats(),
       source,
     });
   } catch (error) {
     console.error('Predictions API error:', error);
-    return res.status(500).json({
-      message: 'Failed to load predictions',
-    });
+    return res.status(500).json({ message: 'Failed to load predictions' });
   }
 }
 
-// 📊 Stats helper
+// 📊 Stats
 async function getStats() {
   const total = await prisma.prediction.count();
 
@@ -166,9 +156,7 @@ async function getStats() {
   });
 
   const settled = await prisma.prediction.count({
-    where: {
-      result: { in: ['won', 'lost'] },
-    },
+    where: { result: { in: ['won', 'lost'] } },
   });
 
   return {
