@@ -41,7 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     const token = await createToken({ userId: user.id, email: user.email, role: user.role });
-    setAuthCookie(token);
+    setAuthCookie(res, token);
 
     return res.status(201).json({ success: true, message: 'Account created successfully' });
   } catch (err) {

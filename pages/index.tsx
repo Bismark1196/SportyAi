@@ -201,6 +201,6 @@ export default function LandingPage({ isLoggedIn }: LandingPageProps) {
 }
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const session = await getSession();
+  const session = await getSession(ctx.req);
   return { props: { isLoggedIn: !!session } };
 };

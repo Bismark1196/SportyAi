@@ -207,8 +207,8 @@ export default function AdminPanel({ promoCodes: initialCodes, users, stats }: A
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async () => {
-  const session = await getSession();
+export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  const session = await getSession(ctx.req);
   if (!session) return { redirect: { destination: '/auth/login', permanent: false } };
   if (session.role !== 'ADMIN') return { redirect: { destination: '/dashboard', permanent: false } };
 

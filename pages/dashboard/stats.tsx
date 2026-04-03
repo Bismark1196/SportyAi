@@ -174,8 +174,8 @@ export default function StatsPage({ stats, user }: StatsPageProps) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async () => {
-  const session = await getSession();
+export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  const session = await getSession(ctx.req);
   if (!session) return { redirect: { destination: '/auth/login', permanent: false } };
 
   const prisma = (await import('../../lib/prisma')).default;

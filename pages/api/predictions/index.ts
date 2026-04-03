@@ -56,9 +56,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           confidence: ai.confidence,
           odds: match.odds
             ? parseFloat(
-                match.prediction === 'home_win'
+                ai.prediction === 'home_win'
                   ? String(match.odds?.home)
-                  : match.prediction === 'away_win'
+                  : ai.prediction === 'away_win'
                   ? String(match.odds?.away)
                   : String(match.odds?.draw)
               ) || null

@@ -214,4 +214,3 @@ Open [http://localhost:3000](http://localhost:3000)
 ## ⚠️ Responsible Gambling
 
 This platform is for entertainment purposes. Always encourage users to gamble responsibly and within their means.
-# SportyAi

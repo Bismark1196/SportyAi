@@ -19,7 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!valid) return res.status(401).json({ message: 'Invalid email or password.' });
 
     const token = await createToken({ userId: user.id, email: user.email, role: user.role });
-    setAuthCookie(token);
+    setAuthCookie(res, token);
 
     return res.status(200).json({ success: true, role: user.role });
   } catch (err) {
