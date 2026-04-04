@@ -8,18 +8,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { code } = req.body;
   if (!code) return res.status(400).json({ message: 'Promo code is required' });
 
-  try {
-    const promoCode = await prisma.promoCode.findUnique({ where: { code } });
+  // Normalize: uppercase and strip whitespace
+  const normalizedCode = String(code).trim().toUpperCase();
 
-    if (!promoCode) return res.status(404).json({ message: 'Invalid promo code. Please check and try again.' });
-    if (promoCode.isUsed) return res.status(400).json({ message: 'This promo code has already been used.' });
+  try {
+    const promoCode = await prisma.promoCode.findUnique({
+      where: { code: normalizedCode },
+    });
+
+    if (!promoCode) {
+      return res.status(404).json({
+        message: `Code "${normalizedCode}" not found. Check for typos or contact support.`,
+      });
+    }
+    if (promoCode.isUsed) {
+      return res.status(400).json({ message: 'This promo code has already been used.' });
+    }
     if (promoCode.expiresAt && new Date() > promoCode.expiresAt) {
       return res.status(400).json({ message: 'This promo code has expired.' });
     }
 
     return res.status(200).json({ valid: true, plan: promoCode.plan, message: 'Promo code verified!' });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    console.error('verify-promo error:', err?.message || err);
+    if (err?.message?.includes('connect') || err?.code === 'P1001' || err?.code === 'P1002') {
+      return res.status(503).json({ message: 'Database not connected. Check DATABASE_URL.' });
+    }
     return res.status(500).json({ message: 'Server error. Please try again.' });
   }
 }
