@@ -9,33 +9,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { name, email, password, promoCode } = req.body;
 
   if (!email || !password || !promoCode) {
-    return res.status(400).json({ message: 'All fields are required' });
+    return res.status(400).json({ message: 'Email, password, and promo code are required.' });
+  }
+  if (String(password).length < 8) {
+    return res.status(400).json({ message: 'Password must be at least 8 characters.' });
   }
 
-  try {
-    // Re-verify promo code (atomically)
-    const promo = await prisma.promoCode.findUnique({ where: { code: promoCode } });
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const normalizedCode = String(promoCode).trim().toUpperCase();
 
-    if (!promo) return res.status(400).json({ message: 'Invalid promo code.' });
-    if (promo.isUsed) return res.status(400).json({ message: 'Promo code already used.' });
+  try {
+    // Verify promo code
+    const promo = await prisma.promoCode.findUnique({ where: { code: normalizedCode } });
+
+    if (!promo) {
+      return res.status(400).json({ message: `Promo code "${normalizedCode}" is invalid.` });
+    }
+    if (promo.isUsed) {
+      return res.status(400).json({ message: 'This promo code has already been used.' });
+    }
     if (promo.expiresAt && new Date() > promo.expiresAt) {
-      return res.status(400).json({ message: 'Promo code has expired.' });
+      return res.status(400).json({ message: 'This promo code has expired.' });
     }
 
-    // Check for existing user
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) return res.status(400).json({ message: 'An account with this email already exists.' });
+    // Check duplicate email
+    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (existing) {
+      return res.status(400).json({ message: 'An account with this email already exists.' });
+    }
 
-    const hashedPassword = await hashPassword(password);
+    const hashedPassword = await hashPassword(String(password));
 
-    // Create user and mark promo used atomically
+    // Atomically create user + mark promo used
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
-        data: { name, email, password: hashedPassword, promoCodeUsed: promoCode },
+        data: {
+          name: name ? String(name).trim() : null,
+          email: normalizedEmail,
+          password: hashedPassword,
+          promoCodeUsed: normalizedCode,
+        },
       });
       await tx.promoCode.update({
-        where: { code: promoCode },
-        data: { isUsed: true, usedBy: email, usedAt: new Date() },
+        where: { code: normalizedCode },
+        data: { isUsed: true, usedBy: normalizedEmail, usedAt: new Date() },
       });
       return newUser;
     });
@@ -43,9 +60,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const token = await createToken({ userId: user.id, email: user.email, role: user.role });
     setAuthCookie(res, token);
 
-    return res.status(201).json({ success: true, message: 'Account created successfully' });
-  } catch (err) {
-    console.error('Register error:', err);
+    return res.status(201).json({ success: true, role: user.role });
+  } catch (err: any) {
+    console.error('Register error:', err?.message || err);
     return res.status(500).json({ message: 'Registration failed. Please try again.' });
   }
 }

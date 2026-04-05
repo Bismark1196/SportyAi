@@ -1,11 +1,13 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl is needed if you use Neon connection pooling (pgbouncer)
+  // Uncomment and set DIRECT_URL in Vercel if migrations fail:
+  // directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -49,11 +51,11 @@ model Prediction {
   league      String
   sport       String   @default("football")
   matchDate   DateTime
-  prediction  String   // home_win, away_win, draw, over_2_5, etc.
-  confidence  Float    // 0-100
+  prediction  String
+  confidence  Float
   odds        Float?
   aiAnalysis  String   @db.Text
-  result      String?  // pending, won, lost
+  result      String?
   isPublished Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
