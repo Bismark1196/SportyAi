@@ -5,9 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  // directUrl is needed if you use Neon connection pooling (pgbouncer)
-  // Uncomment and set DIRECT_URL in Vercel if migrations fail:
-  // directUrl = env("DIRECT_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
