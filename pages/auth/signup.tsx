@@ -1,4 +1,4 @@
-// pages/auth/signup.tsx
+// pages/auth/signup.tsx — Premium Signup Page
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -12,312 +12,217 @@ export default function SignupPage() {
   const [step, setStep] = useState<Step>('promo');
   const [promoCode, setPromoCode] = useState('');
   const [promoData, setPromoData] = useState<any>(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPw, setShowPw] = useState(false);
 
-  // Step 1: Verify promo code
-  const handlePromoSubmit = async (e: FormEvent) => {
+  const handlePromo = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-
+    setLoading(true); setError('');
     const code = promoCode.trim().toUpperCase();
-    if (!code) {
-      setError('Please enter a promo code.');
-      setLoading(false);
-      return;
-    }
-
     try {
       const res = await fetch('/api/auth/verify-promo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
       });
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Invalid promo code. Please check and try again.');
-      }
-
-      setPromoData(data);
-      setPromoCode(code); // Store normalized version
-      setStep('register');
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+      if (!res.ok) throw new Error(data.message || 'Invalid promo code');
+      setPromoData(data); setPromoCode(code); setStep('register');
+    } catch (err: any) { setError(err.message); }
+    finally { setLoading(false); }
   };
 
-  // Step 2: Create account
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match.');
-      setLoading(false);
-      return;
-    }
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters.');
-      setLoading(false);
-      return;
-    }
-
+    if (form.password !== form.confirm) { setError('Passwords do not match'); return; }
+    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    setLoading(true); setError('');
     try {
       const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          email: form.email.trim().toLowerCase(),
-          password: form.password,
-          promoCode: promoCode.trim().toUpperCase(),
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.name.trim(), email: form.email.trim().toLowerCase(), password: form.password, promoCode }),
       });
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Registration failed. Please try again.');
-      }
-
+      if (!res.ok) throw new Error(data.message || 'Registration failed');
       setStep('success');
       setTimeout(() => router.push('/dashboard'), 2500);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err: any) { setError(err.message); }
+    finally { setLoading(false); }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12"
-      style={{ background: 'var(--bg-primary)' }}>
-      <div className="orb orb-1" />
-      <div className="orb orb-2" />
+  const planLabel = promoData?.plan ? promoData.plan.charAt(0) + promoData.plan.slice(1).toLowerCase() : 'Monthly';
 
-      <div className="w-full max-w-md relative z-10">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-block">
-            <span className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.1em' }}>
-              BET<span className="text-brand-500">AI</span>
-            </span>
-          </Link>
-          <p className="text-slate-400 text-sm mt-2">AI-Powered Football Predictions</p>
+  return (
+    <div className="min-h-screen flex" style={{ background: 'var(--bg-void)', fontFamily: 'var(--font-body)' }}>
+      <div className="mesh-bg"><div className="mesh-orb" /></div>
+
+      {/* Left panel */}
+      <div className="hidden lg:flex flex-col justify-between w-1/2 p-12 relative" style={{ borderRight: '1px solid var(--border)', zIndex: 1 }}>
+        <div className="grid-texture absolute inset-0 opacity-60" />
+        <Link href="/" className="flex items-center gap-3 relative">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center"
+            style={{ background: 'var(--accent)', fontFamily: 'var(--font-display)', fontWeight: 800, color: '#020408', fontSize: '1rem' }}>B</div>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.2rem', letterSpacing: '0.08em' }}>
+            BET<span style={{ color: 'var(--accent)' }}>AI</span>
+          </span>
+        </Link>
+
+        <div className="relative">
+          <p className="hero-display mb-6" style={{ fontSize: '3.5rem', lineHeight: 1 }}>
+            Join 1,200+<br />winning<br /><span className="gradient-text">bettors.</span>
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {['Gemini AI-powered predictions daily', 'Premier League, La Liga, Bundesliga & more', 'Confidence scores on every tip', 'Cancel anytime'].map(f => (
+              <div key={f} className="flex items-center gap-3">
+                <span style={{ color: 'var(--accent)', fontSize: '1rem' }}>✓</span>
+                <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{f}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Step indicators */}
-        {step !== 'success' && (
-          <div className="flex items-center justify-center gap-2 mb-8">
-            {[
-              { id: 'promo', num: 1, label: 'Promo Code' },
-              { id: 'register', num: 2, label: 'Create Account' },
-            ].map((s, i) => {
-              const isDone = (s.id === 'promo' && step === 'register');
-              const isActive = step === s.id;
-              return (
-                <div key={s.id} className="flex items-center gap-2">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-all
-                    ${isDone ? 'bg-brand-500/20 border-brand-500/40 text-brand-400' :
-                      isActive ? 'bg-brand-500 border-brand-500 text-dark-900' :
-                      'bg-dark-700 border-dark-600 text-slate-500'}`}>
-                    {isDone ? '✓' : s.num}
+        <div className="relative glass rounded-xl p-5">
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', fontStyle: 'italic' }}>
+            "BetAI's AI predictions have completely changed how I approach football betting. The confidence scores are spot on."
+          </p>
+          <div style={{ fontSize: '0.75rem', color: 'var(--accent)', fontFamily: 'var(--font-display)', letterSpacing: '0.05em' }}>— David K., Premium Member</div>
+        </div>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="flex-1 flex items-center justify-center p-6 relative" style={{ zIndex: 1 }}>
+        <div className="w-full max-w-sm">
+          <Link href="/" className="flex items-center gap-3 mb-8 lg:hidden">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: 'var(--accent)', fontFamily: 'var(--font-display)', fontWeight: 800, color: '#020408' }}>B</div>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, letterSpacing: '0.08em' }}>
+              BET<span style={{ color: 'var(--accent)' }}>AI</span>
+            </span>
+          </Link>
+
+          {/* Step indicator */}
+          {step !== 'success' && (
+            <div className="flex items-center gap-3 mb-8">
+              {[{ id: 'promo', label: 'Promo Code' }, { id: 'register', label: 'Account' }].map((s, i) => {
+                const done = s.id === 'promo' && step === 'register';
+                const active = step === s.id;
+                return (
+                  <div key={s.id} className="flex items-center gap-2">
+                    <div style={{
+                      width: '1.75rem', height: '1.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, border: '1px solid',
+                      background: done ? 'rgba(52,211,153,0.15)' : active ? 'var(--accent)' : 'transparent',
+                      borderColor: done || active ? 'var(--accent)' : 'var(--border)',
+                      color: done ? 'var(--accent)' : active ? '#020408' : 'var(--text-muted)',
+                      fontFamily: 'var(--font-display)',
+                    }}>
+                      {done ? '✓' : i + 1}
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: active ? 'var(--text-primary)' : 'var(--text-muted)', fontFamily: 'var(--font-display)', letterSpacing: '0.05em' }}>{s.label}</span>
+                    {i === 0 && <div style={{ width: '2rem', height: '1px', background: 'var(--border)', margin: '0 0.25rem' }} />}
                   </div>
-                  <span className={`text-xs ${isActive ? 'text-white' : 'text-slate-500'}`}>
-                    {s.label}
-                  </span>
-                  {i === 0 && <div className="w-8 h-px bg-dark-600 mx-1" />}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
 
-        <div className="card p-8">
-
-          {/* ── Step 1: Promo Code ── */}
+          {/* ── Step 1: Promo ── */}
           {step === 'promo' && (
-            <form onSubmit={handlePromoSubmit} className="space-y-5">
+            <form onSubmit={handlePromo} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div>
-                <h2 className="text-2xl font-bold mb-1" style={{ fontFamily: 'var(--font-display)' }}>
-                  ENTER PROMO CODE
-                </h2>
-                <p className="text-slate-400 text-sm mb-5">
-                  Enter your paid promo code to unlock BetAI access.
+                <h2 className="hero-display mb-1" style={{ fontSize: '2rem' }}>Enter Code</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+                  Have an account?{' '}
+                  <Link href="/auth/login" style={{ color: 'var(--accent)', fontWeight: 500 }}>Sign in</Link>
                 </p>
               </div>
 
               <div>
-                <label className="label">Your Promo Code</label>
-                <input
-                  type="text"
+                <label className="label">Promo Code</label>
+                <input type="text" className="input" placeholder="BETAI-XXXX-XXXX"
+                  style={{ textAlign: 'center', fontSize: '1.1rem', letterSpacing: '0.15em', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}
                   value={promoCode}
-                  onChange={e => {
-                    setError('');
-                    setPromoCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''));
-                  }}
-                  className="input-field text-center text-lg tracking-widest font-mono uppercase"
-                  placeholder="BETAI-XXXX-XXXX"
-                  required
-                  maxLength={30}
-                  spellCheck={false}
-                  autoCapitalize="characters"
-                />
-                <p className="text-slate-600 text-xs mt-1.5 text-center">
-                  Enter the code exactly as received
+                  onChange={e => { setError(''); setPromoCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '')); }}
+                  required maxLength={30} spellCheck={false} />
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.5rem' }}>
+                  No code? <a href="mailto:admin@betai.app" style={{ color: 'var(--accent)' }}>Contact us to purchase</a>
                 </p>
               </div>
 
               {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm flex items-start gap-2">
-                  <span className="flex-none">⚠️</span>
-                  <span>{error}</span>
+                <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '8px', padding: '0.875rem', fontSize: '0.82rem', color: 'var(--red)', display: 'flex', gap: '0.5rem' }}>
+                  <span>⚠</span><span>{error}</span>
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={loading || promoCode.length < 4}
-                className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-dark-900/30 border-t-dark-900 rounded-full animate-spin" />
-                    Verifying...
-                  </>
-                ) : 'Verify Code →'}
+              <button type="submit" className="btn-primary" disabled={loading || promoCode.length < 4}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
+                {loading ? <><span style={{ width: '1rem', height: '1rem', border: '2px solid rgba(2,4,8,0.3)', borderTop: '2px solid #020408', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />Verifying...</> : 'Verify Code →'}
               </button>
-
-              <p className="text-center text-slate-500 text-xs pt-1">
-                No code?{' '}
-                <a href="mailto:admin@betai.app" className="text-brand-400 hover:text-brand-300">
-                  Contact support to purchase
-                </a>
-              </p>
             </form>
           )}
 
           {/* ── Step 2: Register ── */}
           {step === 'register' && (
-            <form onSubmit={handleRegister} className="space-y-4">
-              {/* Verified code badge */}
-              <div className="flex items-center gap-3 bg-brand-500/10 border border-brand-500/25 rounded-lg p-3 mb-2">
-                <div className="w-6 h-6 bg-brand-500 rounded-full flex items-center justify-center text-dark-900 text-xs font-bold flex-none">
-                  ✓
-                </div>
+            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Code badge */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '0.5rem' }}>
+                <div style={{ width: '1.5rem', height: '1.5rem', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: '#020408', fontWeight: 700, flexShrink: 0 }}>✓</div>
                 <div>
-                  <div className="text-brand-400 text-xs font-bold font-mono">{promoCode}</div>
-                  <div className="text-slate-400 text-xs">
-                    {promoData?.plan ? `${promoData.plan.charAt(0) + promoData.plan.slice(1).toLowerCase()} plan` : 'Monthly plan'} — verified
-                  </div>
+                  <div style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 500 }}>{promoCode}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{planLabel} plan · verified</div>
                 </div>
               </div>
 
               <div>
-                <h2 className="text-2xl font-bold mb-1" style={{ fontFamily: 'var(--font-display)' }}>
-                  CREATE ACCOUNT
-                </h2>
-                <p className="text-slate-400 text-sm mb-3">Fill in your details below.</p>
+                <h2 className="hero-display" style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>Create Account</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Fill in your details below</p>
               </div>
 
-              <div>
-                <label className="label">Full Name</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="John Doe"
-                  value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  autoComplete="name"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="label">Email Address</label>
-                <input
-                  type="email"
-                  className="input-field"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={e => setForm({ ...form, email: e.target.value })}
-                  autoComplete="email"
-                  required
-                />
-              </div>
+              {[
+                { label: 'Full Name', key: 'name', type: 'text', placeholder: 'John Doe', autoComplete: 'name' },
+                { label: 'Email Address', key: 'email', type: 'email', placeholder: 'you@example.com', autoComplete: 'email' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="label">{f.label}</label>
+                  <input type={f.type} className="input" placeholder={f.placeholder} autoComplete={f.autoComplete}
+                    value={(form as any)[f.key]} onChange={e => { setError(''); setForm({ ...form, [f.key]: e.target.value }); }} required />
+                </div>
+              ))}
 
               <div>
                 <label className="label">Password</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    className="input-field pr-12"
-                    placeholder="Min. 8 characters"
-                    value={form.password}
-                    onChange={e => setForm({ ...form, password: e.target.value })}
-                    autoComplete="new-password"
-                    required
-                    minLength={8}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? 'HIDE' : 'SHOW'}
+                <div style={{ position: 'relative' }}>
+                  <input type={showPw ? 'text' : 'password'} className="input" placeholder="Min. 8 characters"
+                    style={{ paddingRight: '4rem' }} autoComplete="new-password"
+                    value={form.password} onChange={e => { setError(''); setForm({ ...form, password: e.target.value }); }} required minLength={8} />
+                  <button type="button" onClick={() => setShowPw(v => !v)}
+                    style={{ position: 'absolute', right: '0.875rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.65rem', fontFamily: 'var(--font-display)', letterSpacing: '0.08em', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    {showPw ? 'HIDE' : 'SHOW'}
                   </button>
                 </div>
               </div>
 
               <div>
                 <label className="label">Confirm Password</label>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  className="input-field"
-                  placeholder="Repeat password"
-                  value={form.confirmPassword}
-                  onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
-                  autoComplete="new-password"
-                  required
-                />
-                {form.confirmPassword && form.password !== form.confirmPassword && (
-                  <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
+                <input type={showPw ? 'text' : 'password'} className="input" placeholder="Repeat password" autoComplete="new-password"
+                  value={form.confirm} onChange={e => { setError(''); setForm({ ...form, confirm: e.target.value }); }} required />
+                {form.confirm && form.password !== form.confirm && (
+                  <p style={{ fontSize: '0.7rem', color: 'var(--red)', marginTop: '0.4rem' }}>Passwords do not match</p>
                 )}
               </div>
 
               {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm flex items-start gap-2">
-                  <span className="flex-none">⚠️</span>
-                  <span>{error}</span>
+                <div style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '8px', padding: '0.875rem', fontSize: '0.82rem', color: 'var(--red)', display: 'flex', gap: '0.5rem' }}>
+                  <span>⚠</span><span>{error}</span>
                 </div>
               )}
 
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => { setStep('promo'); setError(''); }}
-                  className="btn-secondary px-4 py-3 text-sm"
-                >
-                  ← Back
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading || !form.email || !form.password || !form.name || form.password !== form.confirmPassword}
-                  className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-dark-900/30 border-t-dark-900 rounded-full animate-spin" />
-                      Creating account...
-                    </>
-                  ) : 'Create Account →'}
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button type="button" className="btn-ghost" onClick={() => { setStep('promo'); setError(''); }} style={{ padding: '0.875rem 1.25rem', fontSize: '0.85rem' }}>← Back</button>
+                <button type="submit" className="btn-primary" disabled={loading || !form.email || !form.password || !form.name || form.password !== form.confirm}
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                  {loading ? <><span style={{ width: '1rem', height: '1rem', border: '2px solid rgba(2,4,8,0.3)', borderTop: '2px solid #020408', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />Creating...</> : 'Create Account →'}
                 </button>
               </div>
             </form>
@@ -325,44 +230,22 @@ export default function SignupPage() {
 
           {/* ── Step 3: Success ── */}
           {step === 'success' && (
-            <div className="text-center py-8">
-              <div className="w-20 h-20 bg-brand-500/20 border-2 border-brand-500/40 rounded-full flex items-center justify-center text-4xl mx-auto mb-5">
-                🎉
-              </div>
-              <h2 className="text-3xl font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-                YOU'RE IN!
-              </h2>
-              <p className="text-slate-400 text-sm mb-6">
-                Account created. Redirecting to your dashboard...
-              </p>
-              <div className="w-8 h-8 border-2 border-brand-500/30 border-t-brand-500 rounded-full animate-spin mx-auto" />
+            <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+              <div style={{ width: '5rem', height: '5rem', borderRadius: '50%', background: 'rgba(52,211,153,0.1)', border: '2px solid rgba(52,211,153,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', margin: '0 auto 1.5rem' }}>🎉</div>
+              <h2 className="hero-display mb-2" style={{ fontSize: '2.5rem' }}>You're in!</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '2rem' }}>Welcome to BetAI. Redirecting to your dashboard...</p>
+              <div style={{ width: '2rem', height: '2rem', border: '2px solid rgba(52,211,153,0.2)', borderTop: '2px solid var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
             </div>
           )}
         </div>
-
-        {step !== 'success' && (
-          <p className="text-center text-slate-500 text-sm mt-6">
-            Already have an account?{' '}
-            <Link href="/auth/login" className="text-brand-400 hover:text-brand-300 transition-colors">
-              Sign in
-            </Link>
-          </p>
-        )}
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
 
-// Redirect already-logged-in users
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getSession(ctx.req);
-  if (session) {
-    return {
-      redirect: {
-        destination: session.role === 'ADMIN' ? '/admin' : '/dashboard',
-        permanent: false,
-      },
-    };
-  }
+  if (session) return { redirect: { destination: session.role === 'ADMIN' ? '/admin' : '/dashboard', permanent: false } };
   return { props: {} };
 };

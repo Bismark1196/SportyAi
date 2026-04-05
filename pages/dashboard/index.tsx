@@ -1,4 +1,4 @@
-// pages/dashboard/index.tsx
+// pages/dashboard/index.tsx — Premium Dashboard
 import { GetServerSideProps } from 'next';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -6,249 +6,248 @@ import useSWR from 'swr';
 import { getSession } from '../../lib/auth';
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
+const FILTERS = ['All', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Ligue 1', 'Champions League'];
 
-const FILTERS = ['All', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Ligue 1'];
+const PRED_LABELS: Record<string, string> = {
+  home_win: 'Home Win', away_win: 'Away Win', draw: 'Draw',
+  over_2_5: 'Over 2.5', under_2_5: 'Under 2.5', btts: 'BTTS',
+};
 
-interface DashboardProps {
-  user: { name: string; email: string; role: string };
-}
+interface Props { user: { name: string; email: string; role: string } }
 
-export default function Dashboard({ user }: DashboardProps) {
+export default function Dashboard({ user }: Props) {
   const [filter, setFilter] = useState('All');
-  const [activeTab, setActiveTab] = useState<'predictions' | 'history'>('predictions');
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  const { data: predictionsData, isLoading } = useSWR('/api/predictions', fetcher, {
-    refreshInterval: 300_000, // Refresh every 5 min
-  });
+  const { data, isLoading, mutate } = useSWR('/api/predictions', fetcher, { refreshInterval: 300_000 });
+  const predictions = data?.predictions || [];
+  const stats = data?.stats || {};
 
-  const predictions = predictionsData?.predictions || [];
   const filtered = filter === 'All' ? predictions : predictions.filter((p: any) => p.league === filter);
-  const winRate = predictionsData?.stats?.winRate || 74;
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.href = '/';
   };
 
+  const handleRefresh = async () => {
+    await fetch('/api/predictions?refresh=1');
+    mutate();
+  };
+
+  const navItems = [
+    { icon: '◈', label: 'Predictions', href: '/dashboard', active: true },
+    { icon: '◎', label: 'Statistics',  href: '/dashboard/stats' },
+    { icon: '◐', label: 'History',     href: '/dashboard/history' },
+    ...(user.role === 'ADMIN' ? [{ icon: '⚙', label: 'Admin Panel', href: '/admin', active: false }] : []),
+  ];
+
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 border-r border-white/5 hidden lg:flex flex-col"
-        style={{ background: 'var(--bg-secondary)' }}>
-        <div className="p-6 border-b border-white/5">
-          <span className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.1em' }}>
-            BET<span className="text-brand-500">AI</span>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-void)', fontFamily: 'var(--font-body)' }}>
+      <div className="mesh-bg"><div className="mesh-orb" /></div>
+
+      {/* ── Sidebar ── */}
+      <aside className="hidden lg:flex flex-col" style={{ width: '240px', background: 'var(--bg-base)', borderRight: '1px solid var(--border)', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 40, padding: '1.5rem 1rem' }}>
+        {/* Logo */}
+        <div style={{ padding: '0.5rem 0 2rem', borderBottom: '1px solid var(--border)', marginBottom: '1.5rem' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', letterSpacing: '0.08em' }}>
+            BET<span style={{ color: 'var(--accent)' }}>AI</span>
           </span>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
-          {[
-            { icon: '📊', label: 'Predictions', href: '/dashboard', active: true },
-            { icon: '📈', label: 'Statistics', href: '/dashboard/stats' },
-            { icon: '🏆', label: 'History', href: '/dashboard/history' },
-            ...(user.role === 'ADMIN' ? [{ icon: '⚙️', label: 'Admin Panel', href: '/admin' }] : []),
-          ].map((item) => (
-            <Link key={item.label} href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all
-                ${item.active ? 'bg-brand-500/15 border border-brand-500/30 text-brand-400' : 
-                  'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-              <span>{item.icon}</span>
+        {/* Nav */}
+        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          {navItems.map(item => (
+            <Link key={item.label} href={item.href} className={`sidebar-item ${item.active ? 'active' : ''}`}>
+              <span style={{ fontSize: '0.9rem' }}>{item.icon}</span>
               {item.label}
             </Link>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-white/5">
-          <div className="flex items-center gap-3 px-4 py-3 mb-2">
-            <div className="w-8 h-8 bg-brand-500/20 border border-brand-500/30 rounded-full flex items-center justify-center text-brand-400 font-bold text-sm">
+        {/* User */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', marginBottom: '0.5rem' }}>
+            <div style={{ width: '2rem', height: '2rem', borderRadius: '50%', background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0, fontFamily: 'var(--font-display)' }}>
               {user.name?.[0]?.toUpperCase() || 'U'}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-white text-sm font-medium truncate">{user.name || 'User'}</div>
-              <div className="text-slate-500 text-xs truncate">{user.email}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name || 'User'}</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
             </div>
           </div>
-          <button onClick={handleLogout}
-            className="w-full text-left text-slate-400 hover:text-white text-sm px-4 py-2 rounded-lg hover:bg-white/5 transition-all">
-            → Sign Out
+          <button onClick={handleLogout} className="sidebar-item" style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+            <span style={{ fontSize: '0.9rem' }}>→</span> Sign Out
           </button>
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="lg:ml-64 min-h-screen">
+      {/* ── Main ── */}
+      <main style={{ flex: 1, marginLeft: '240px', position: 'relative', zIndex: 1 }} className="lg-margin">
         {/* Top bar */}
-        <header className="sticky top-0 z-40 border-b border-white/5 px-6 py-4 flex items-center justify-between"
-          style={{ background: 'rgba(5,10,14,0.9)', backdropFilter: 'blur(10px)' }}>
+        <header style={{ position: 'sticky', top: 0, zIndex: 30, background: 'rgba(2,4,8,0.9)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)', padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'var(--font-display)', letterSpacing: '0.05em' }}>
-              TODAY'S PREDICTIONS
-            </h1>
-            <p className="text-slate-500 text-xs">
+            <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', letterSpacing: '0.05em' }}>TODAY'S PREDICTIONS</h1>
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20">
-              <span className="w-2 h-2 bg-brand-400 rounded-full animate-pulse" />
-              <span className="text-brand-400 text-xs font-medium">AI Live</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button onClick={handleRefresh} className="btn-ghost" style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              ↻ Refresh
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.375rem 0.875rem', borderRadius: '999px', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' }}>
+              <span className="live-dot" style={{ width: '0.5rem', height: '0.5rem', borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
+              <span style={{ fontSize: '0.7rem', fontFamily: 'var(--font-display)', fontWeight: 600, letterSpacing: '0.08em', color: 'var(--accent)' }}>AI LIVE</span>
             </div>
-            <button onClick={handleLogout} className="lg:hidden text-slate-400 text-sm">Sign Out</button>
           </div>
         </header>
 
-        <div className="p-6 max-w-6xl mx-auto">
+        <div style={{ padding: '1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
           {/* Stats row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             {[
-              { label: 'Win Rate', value: `${winRate}%`, icon: '🎯', color: 'text-brand-400' },
-              { label: "Today's Tips", value: String(predictions.length), icon: '📋', color: 'text-blue-400' },
-              { label: 'Avg Confidence', value: predictions.length ? `${Math.round(predictions.reduce((a: number, p: any) => a + p.confidence, 0) / predictions.length)}%` : '—', icon: '🧠', color: 'text-gold-400' },
-              { label: 'Status', value: 'Active', icon: '✅', color: 'text-brand-400' },
+              { label: 'Win Rate',       value: `${stats.winRate || 74}%`, icon: '◈', color: 'var(--accent)' },
+              { label: "Today's Tips",   value: String(predictions.length), icon: '◎', color: 'var(--blue)' },
+              { label: 'Avg Confidence', value: predictions.length ? `${Math.round(predictions.reduce((a: number, p: any) => a + p.confidence, 0) / predictions.length)}%` : '—', icon: '◐', color: 'var(--gold)' },
+              { label: 'Status',         value: 'ACTIVE', icon: '◑', color: 'var(--accent)' },
             ].map((s, i) => (
-              <div key={i} className="card p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-lg">{s.icon}</span>
-                  <span className="text-slate-400 text-xs uppercase tracking-wide">{s.label}</span>
+              <div key={i} className="stat-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <span style={{ color: s.color, fontSize: '1rem' }}>{s.icon}</span>
+                  <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-display)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{s.label}</span>
                 </div>
-                <div className={`text-2xl font-bold ${s.color}`} style={{ fontFamily: 'var(--font-display)' }}>
-                  {s.value}
-                </div>
+                <div className="hero-display" style={{ fontSize: '1.75rem', color: s.color }}>{s.value}</div>
               </div>
             ))}
           </div>
 
-          {/* Filters */}
-          <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
+          {/* League filters */}
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide mb-6" style={{ paddingBottom: '0.25rem' }}>
             {FILTERS.map(f => (
               <button key={f} onClick={() => setFilter(f)}
-                className={`flex-none text-xs px-4 py-2 rounded-full border transition-all whitespace-nowrap
-                  ${filter === f ? 'bg-brand-500/20 border-brand-500/40 text-brand-400' : 
-                    'border-white/10 text-slate-400 hover:border-white/20 hover:text-white'}`}>
+                style={{
+                  flexShrink: 0, padding: '0.4rem 1rem', borderRadius: '999px', fontSize: '0.75rem', fontFamily: 'var(--font-display)', letterSpacing: '0.05em', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', border: '1px solid',
+                  background: filter === f ? 'rgba(52,211,153,0.12)' : 'transparent',
+                  borderColor: filter === f ? 'var(--border-accent)' : 'var(--border)',
+                  color: filter === f ? 'var(--accent)' : 'var(--text-muted)',
+                }}>
                 {f}
               </button>
             ))}
           </div>
 
-          {/* Predictions Grid */}
+          {/* Prediction grid */}
           {isLoading ? (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="card p-5 space-y-3">
-                  <div className="shimmer h-4 w-24 rounded" />
-                  <div className="shimmer h-6 w-full rounded" />
-                  <div className="shimmer h-3 w-3/4 rounded" />
-                  <div className="shimmer h-10 w-full rounded" />
+                <div key={i} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div className="shimmer" style={{ height: '0.75rem', width: '40%' }} />
+                  <div className="shimmer" style={{ height: '1.5rem', width: '80%' }} />
+                  <div className="shimmer" style={{ height: '0.65rem', width: '60%' }} />
+                  <div className="shimmer" style={{ height: '2.5rem', width: '100%', borderRadius: '8px' }} />
                 </div>
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-20">
-              <div className="text-4xl mb-4">🤖</div>
-              <h3 className="text-white font-bold mb-2">AI is analyzing matches...</h3>
-              <p className="text-slate-400 text-sm">Check back soon for today's predictions</p>
+            <div style={{ textAlign: 'center', padding: '5rem 0' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>◈</div>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', marginBottom: '0.5rem' }}>AI is analyzing matches...</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>Check back soon or refresh predictions</p>
+              <button onClick={handleRefresh} className="btn-outline" style={{ fontSize: '0.85rem', padding: '0.75rem 1.5rem' }}>↻ Refresh Now</button>
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filtered.map((p: any, i: number) => (
-                <PredictionCard key={p.id} prediction={p} index={i} />
+              {filtered.map((p: any) => (
+                <PredictionCard key={p.id} p={p} expanded={expanded === p.id} onToggle={() => setExpanded(expanded === p.id ? null : p.id)} />
               ))}
             </div>
           )}
         </div>
       </main>
+
+      <style>{`
+        @media (max-width: 1023px) { main { margin-left: 0 !important; } }
+      `}</style>
     </div>
   );
 }
 
-function PredictionCard({ prediction: p, index }: { prediction: any; index: number }) {
-  const [expanded, setExpanded] = useState(false);
-
-  const confidenceColor = p.confidence >= 80 ? '#22c55e' :
-    p.confidence >= 65 ? '#fbbf24' : '#ef4444';
-
-  const predictionLabels: Record<string, string> = {
-    home_win: 'Home Win',
-    away_win: 'Away Win',
-    draw: 'Draw',
-    over_2_5: 'Over 2.5 Goals',
-    under_2_5: 'Under 2.5 Goals',
-    btts: 'Both Teams Score',
-  };
+function PredictionCard({ p, expanded, onToggle }: { p: any; expanded: boolean; onToggle: () => void }) {
+  const conf = p.confidence;
+  const confColor = conf >= 80 ? 'var(--accent)' : conf >= 65 ? 'var(--gold)' : 'var(--red)';
+  const matchTime = new Date(p.matchDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const matchDate = new Date(p.matchDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   return (
-    <div className="prediction-card card p-5 cursor-pointer"
-      style={{ animationDelay: `${index * 0.08}s` }}
-      onClick={() => setExpanded(!expanded)}>
-      
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-slate-500 font-mono">{p.league}</span>
-        <span className="text-xs text-slate-600">
-          {new Date(p.matchDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-        </span>
-      </div>
-
-      {/* Teams */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex-1 text-right">
-          <div className="font-bold text-white text-sm leading-tight">{p.homeTeam}</div>
-          <div className="text-xs text-slate-500">Home</div>
+    <div className="fade-up glass glass-hover rounded-xl cursor-pointer" style={{ display: 'flex', flexDirection: 'column' }} onClick={onToggle}>
+      <div style={{ padding: '1.25rem' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-display)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{p.league}</span>
+          <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{matchDate} · {matchTime}</span>
         </div>
-        <div className="flex-none px-3 py-1.5 bg-dark-700 rounded-lg text-xs text-slate-400 font-mono">VS</div>
-        <div className="flex-1">
-          <div className="font-bold text-white text-sm leading-tight">{p.awayTeam}</div>
-          <div className="text-xs text-slate-500">Away</div>
-        </div>
-      </div>
 
-      {/* Prediction badge */}
-      <div className="flex items-center gap-3 mb-3">
-        <div className="flex-1 bg-dark-700 rounded-lg px-3 py-2">
-          <div className="text-xs text-slate-400 mb-0.5">AI Prediction</div>
-          <div className="font-bold text-brand-400 text-sm">
-            {predictionLabels[p.prediction] || p.prediction}
+        {/* Teams */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <div style={{ flex: 1, textAlign: 'right' }}>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: 1.2 }}>{p.homeTeam}</div>
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Home</div>
+          </div>
+          <div style={{ padding: '0.375rem 0.625rem', background: 'var(--bg-elevated)', borderRadius: '6px', fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-display)', letterSpacing: '0.05em', flexShrink: 0 }}>VS</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.2 }}>{p.awayTeam}</div>
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Away</div>
           </div>
         </div>
-        {p.odds && (
-          <div className="text-center bg-gold-500/10 border border-gold-500/20 rounded-lg px-3 py-2">
-            <div className="text-xs text-gold-500/60 mb-0.5">Odds</div>
-            <div className="font-bold text-gold-400 text-sm font-mono">{p.odds}</div>
-          </div>
-        )}
-      </div>
 
-      {/* Confidence */}
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-500">Confidence</span>
-          <span className="font-bold font-mono" style={{ color: confidenceColor }}>{p.confidence}%</span>
+        {/* Prediction row */}
+        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div style={{ flex: 1, background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.12)', borderRadius: '8px', padding: '0.625rem 0.875rem' }}>
+            <div style={{ fontSize: '0.6rem', fontFamily: 'var(--font-display)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>AI Prediction</div>
+            <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--accent)', fontFamily: 'var(--font-display)', letterSpacing: '0.02em' }}>{PRED_LABELS[p.prediction] || p.prediction}</div>
+          </div>
+          {p.odds && (
+            <div style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: '8px', padding: '0.625rem 0.875rem', textAlign: 'center', minWidth: '64px' }}>
+              <div style={{ fontSize: '0.6rem', fontFamily: 'var(--font-display)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--gold)', opacity: 0.7, marginBottom: '0.2rem' }}>Odds</div>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--gold)', fontFamily: 'var(--font-mono)' }}>{typeof p.odds === 'number' ? p.odds.toFixed(2) : p.odds}</div>
+            </div>
+          )}
         </div>
-        <div className="confidence-bar">
-          <div className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${p.confidence}%`, background: `linear-gradient(90deg, ${confidenceColor}80, ${confidenceColor})` }} />
+
+        {/* Confidence */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Confidence</span>
+            <span style={{ fontSize: '0.7rem', fontFamily: 'var(--font-mono)', fontWeight: 600, color: confColor }}>{conf}%</span>
+          </div>
+          <div className="conf-bar">
+            <div className="conf-bar-fill" style={{ width: `${conf}%`, background: confColor }} />
+          </div>
         </div>
       </div>
 
       {/* Expanded analysis */}
-      {expanded && (
-        <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="text-xs text-slate-400 leading-relaxed mb-3">{p.aiAnalysis}</div>
-          {p.tips && (
-            <div className="space-y-1.5">
-              {p.tips.map((tip: string, i: number) => (
-                <div key={i} className="flex items-start gap-2 text-xs text-slate-400">
-                  <span className="text-brand-500 mt-0.5 flex-none">→</span>
-                  <span>{tip}</span>
-                </div>
-              ))}
-            </div>
-          )}
+      {expanded && p.aiAnalysis && (
+        <div style={{ padding: '0 1.25rem 1.25rem', borderTop: '1px solid var(--border)', marginTop: '0' }}>
+          <div style={{ paddingTop: '1rem' }}>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '0.875rem' }}>{p.aiAnalysis}</p>
+            {p.tips?.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {p.tips.map((tip: string, i: number) => (
+                  <div key={i} style={{ display: 'flex', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    <span style={{ color: 'var(--accent)', flexShrink: 0 }}>→</span>
+                    <span>{tip}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      <div className="text-center mt-3 text-xs text-slate-600">
-        {expanded ? '▲ Less' : '▼ AI Analysis'}
+      <div style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.65rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
+        {expanded ? '▲ Hide Analysis' : '▼ View AI Analysis'}
       </div>
     </div>
   );
@@ -257,14 +256,8 @@ function PredictionCard({ prediction: p, index }: { prediction: any; index: numb
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getSession(ctx.req);
   if (!session) return { redirect: { destination: '/auth/login', permanent: false } };
-
   const prisma = (await import('../../lib/prisma')).default;
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { name: true, email: true, role: true, isActive: true },
-  });
-
+  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { name: true, email: true, role: true, isActive: true } });
   if (!user || !user.isActive) return { redirect: { destination: '/auth/login', permanent: false } };
-
   return { props: { user: { name: user.name || '', email: user.email, role: user.role } } };
 };
