@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String?
+  role          Role      @default(USER)
+  isActive      Boolean   @default(true)
+  promoCodeUsed String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PromoCode {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  isUsed      Boolean   @default(false)
+  usedBy      String?
+  usedAt      DateTime?
+  expiresAt   DateTime?
+  plan        PlanType  @default(MONTHLY)
+  createdAt   DateTime  @default(now())
+}
+
+model Prediction {
+  id          String   @id @default(cuid())
+  matchId     String
+  homeTeam    String
+  awayTeam    String
+  league      String
+  sport       String   @default("football")
+  matchDate   DateTime
+  prediction  String
+  confidence  Float
+  odds        Float?
+  aiAnalysis  String   @db.Text
+  result      String?
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PlanType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
