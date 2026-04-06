@@ -1,409 +1,475 @@
-// pages/dashboard/index.tsx — Professional Sportsbook Dashboard v2
-import { GetServerSideProps } from 'next';
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import useSWR from 'swr';
-import { getSession } from '../../lib/auth';
+import { useState, useEffect, useCallback } from "react";
 
-const fetcher = (url: string) => fetch(url).then(r => r.json());
-
-const FILTERS = ['All', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Ligue 1', 'Champions League'];
-
-const LEAGUE_FLAGS: Record<string, string> = {
-  'Premier League': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-  'La Liga': '🇪🇸',
-  'Bundesliga': '🇩🇪',
-  'Serie A': '🇮🇹',
-  'Ligue 1': '🇫🇷',
-  'Champions League': '⭐',
+const LEAGUE_FLAGS = {
+  "Premier League": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+  "Champions League": "⭐",
+  "La Liga": "🇪🇸",
+  "Bundesliga": "🇩🇪",
+  "Serie A": "🇮🇹",
+  "Ligue 1": "🇫🇷",
 };
 
-const PRED_LABELS: Record<string, { short: string; long: string; color: string }> = {
-  home_win:  { short: '1',    long: 'Home Win',         color: 'var(--blue)' },
-  draw:      { short: 'X',    long: 'Draw',              color: 'var(--gold)' },
-  away_win:  { short: '2',    long: 'Away Win',          color: 'var(--red)' },
-  over_2_5:  { short: 'O2.5', long: 'Over 2.5 Goals',   color: 'var(--accent)' },
-  under_2_5: { short: 'U2.5', long: 'Under 2.5 Goals',  color: 'var(--accent)' },
-  btts:      { short: 'GG',   long: 'Both Teams Score',  color: 'var(--accent)' },
+const PRED_LABELS = {
+  home_win:  { short: "1",    long: "Home Win",        color: "#60a5fa" },
+  draw:      { short: "X",    long: "Draw",             color: "#fbbf24" },
+  away_win:  { short: "2",    long: "Away Win",         color: "#f87171" },
+  over_2_5:  { short: "O2.5", long: "Over 2.5 Goals",  color: "#34d399" },
+  btts:      { short: "GG",   long: "Both Teams Score", color: "#a78bfa" },
 };
 
-interface BetSlipItem {
-  id: string;
-  homeTeam: string;
-  awayTeam: string;
-  league: string;
-  prediction: string;
-  odds: number;
-  stake: string;
+const REAL_GAMES = [
+  // UCL Tonight (Apr 7)
+  { id: "ucl1", league: "Champions League", homeTeam: "Real Madrid", awayTeam: "Bayern Munich", matchDate: "2026-04-07T19:00:00Z", localTime: "Tue Apr 7, 10:00 PM", status: "scheduled", prediction: "away_win", confidence: 72, odds: { home: 2.40, draw: 3.30, away: 2.80 }, winProb: { home: 34, draw: 24, away: 42 }, aiAnalysis: "Bayern have been in exceptional form and Real Madrid's defence has looked shaky. Expect a high-intensity battle with Bayern pressing high.", tips: ["Bayern scored 4 goals in last UCL match", "Real Madrid lost at home last time in UCL", "Expect over 2.5 goals"] },
+  { id: "ucl2", league: "Champions League", homeTeam: "Sporting CP", awayTeam: "Arsenal", matchDate: "2026-04-07T19:00:00Z", localTime: "Tue Apr 7, 10:00 PM", status: "scheduled", prediction: "away_win", confidence: 78, odds: { home: 3.80, draw: 3.50, away: 1.85 }, winProb: { home: 21, draw: 25, away: 54 }, aiAnalysis: "Arsenal's UCL run has been dominant. Sporting at home is tricky but Arsenal's attacking depth should prevail. Saka and Martinelli in great form.", tips: ["Arsenal won 2-0 last leg", "Arsenal kept clean sheet last UCL outing", "Sporting's home form in UCL has been weak"] },
+  // UCL Apr 8
+  { id: "ucl3", league: "Champions League", homeTeam: "PSG", awayTeam: "Liverpool", matchDate: "2026-04-08T19:00:00Z", localTime: "Wed Apr 8, 10:00 PM", status: "scheduled", prediction: "home_win", confidence: 65, odds: { home: 1.95, draw: 3.40, away: 3.80 }, winProb: { home: 56, draw: 23, away: 22 }, aiAnalysis: "PSG at Parc des Princes will be electric. Liverpool are strong but PSG's home record in Europe is formidable this season.", tips: ["PSG won 5-2 in the first leg aggregate", "Liverpool must score to progress", "Expect an open and high-scoring affair"] },
+  { id: "ucl4", league: "Champions League", homeTeam: "Barcelona", awayTeam: "Atletico Madrid", matchDate: "2026-04-08T19:00:00Z", localTime: "Wed Apr 8, 10:00 PM", status: "scheduled", prediction: "home_win", confidence: 82, odds: { home: 1.65, draw: 3.70, away: 5.00 }, winProb: { home: 63, draw: 19, away: 18 }, aiAnalysis: "Barcelona demolished Newcastle 7-2. Atletico will look to frustrate but Barça's form is too strong at Camp Nou right now.", tips: ["Barcelona on a 6-match winning streak", "Atletico rarely concede but struggle to score away in UCL", "Lewandowski in red-hot form"] },
+  // EPL Apr 10-13
+  { id: "epl1", league: "Premier League", homeTeam: "West Ham", awayTeam: "Wolves", matchDate: "2026-04-10T19:00:00Z", localTime: "Fri Apr 10, 10:00 PM", status: "scheduled", prediction: "home_win", confidence: 68, odds: { home: 1.85, draw: 3.40, away: 4.20 }, winProb: { home: 53, draw: 25, away: 22 }, aiAnalysis: "West Ham have home advantage and Wolves have struggled away all season. Expect West Ham to dominate possession.", tips: ["Wolves winless in last 7 away games", "West Ham strong at London Stadium", "Expect under 3 goals"] },
+  { id: "epl2", league: "Premier League", homeTeam: "Arsenal", awayTeam: "Bournemouth", matchDate: "2026-04-11T11:30:00Z", localTime: "Sat Apr 11, 2:30 PM", status: "scheduled", prediction: "home_win", confidence: 85, odds: { home: 1.45, draw: 4.20, away: 6.50 }, winProb: { home: 66, draw: 20, away: 14 }, aiAnalysis: "Arsenal at home against Bournemouth is a banker. Gunners in title race and need every point. Bournemouth's away record is dire.", tips: ["Arsenal unbeaten at home this season", "Bournemouth scored only once in last 4 away games", "Saka back from injury"] },
+  { id: "epl3", league: "Premier League", homeTeam: "Liverpool", awayTeam: "Fulham", matchDate: "2026-04-11T16:30:00Z", localTime: "Sat Apr 11, 7:30 PM", status: "scheduled", prediction: "home_win", confidence: 77, odds: { home: 1.60, draw: 3.80, away: 5.50 }, winProb: { home: 61, draw: 21, away: 18 }, aiAnalysis: "Liverpool need points in the title race. Fulham can be tricky but Anfield's atmosphere should carry the Reds.", tips: ["Liverpool on a 5-game home winning streak", "Fulham lost 3-1 to Fulham in December", "Salah fit and firing"] },
+  { id: "epl4", league: "Premier League", homeTeam: "Chelsea", awayTeam: "Man City", matchDate: "2026-04-12T15:30:00Z", localTime: "Sun Apr 12, 6:30 PM", status: "scheduled", prediction: "away_win", confidence: 60, odds: { home: 2.60, draw: 3.20, away: 2.60 }, winProb: { home: 31, draw: 25, away: 44 }, aiAnalysis: "A fascinating clash at Stamford Bridge. City have the quality edge but Chelsea at home are dangerous. Could go either way.", tips: ["Both teams scored in last 3 meetings", "Haaland needs one goal to reach 30 this season", "Expect high tempo and chances both ways"] },
+  { id: "epl5", league: "Premier League", homeTeam: "Crystal Palace", awayTeam: "Newcastle", matchDate: "2026-04-12T13:00:00Z", localTime: "Sun Apr 12, 4:00 PM", status: "scheduled", prediction: "away_win", confidence: 55, odds: { home: 2.80, draw: 3.10, away: 2.50 }, winProb: { home: 34, draw: 27, away: 40 }, aiAnalysis: "Newcastle are in strong form and need European qualification. Palace will make it tough but Newcastle should edge it.", tips: ["Newcastle unbeaten in last 5", "Palace strong defensively at home", "Isak a key threat for Newcastle"] },
+  { id: "epl6", league: "Premier League", homeTeam: "Man United", awayTeam: "Leeds United", matchDate: "2026-04-13T19:00:00Z", localTime: "Mon Apr 13, 10:00 PM", status: "scheduled", prediction: "home_win", confidence: 74, odds: { home: 1.70, draw: 3.60, away: 5.00 }, winProb: { home: 60, draw: 22, away: 18 }, aiAnalysis: "Old Trafford derby. Leeds are newly promoted and United should have too much quality. But derbies are always unpredictable.", tips: ["United won 4 of last 5 home games", "Leeds scored in last 6 matches", "Rashford in form with 3 goals in 3"] },
+  // Recent results for context
+  { id: "res1", league: "Champions League", homeTeam: "Arsenal", awayTeam: "Bayer Leverkusen", matchDate: "2026-03-17T20:00:00Z", localTime: "Tue Mar 17", status: "final", score: { home: 2, away: 0 }, prediction: "home_win", confidence: 81, odds: { home: 1.75, draw: 3.60, away: 4.20 } },
+  { id: "res2", league: "Champions League", homeTeam: "Barcelona", awayTeam: "Newcastle", matchDate: "2026-03-18T17:45:00Z", localTime: "Wed Mar 18", status: "final", score: { home: 7, away: 2 }, prediction: "home_win", confidence: 88, odds: { home: 1.50, draw: 4.00, away: 6.00 } },
+  { id: "res3", league: "Champions League", homeTeam: "Liverpool", awayTeam: "Galatasaray", matchDate: "2026-03-18T20:00:00Z", localTime: "Wed Mar 18", status: "final", score: { home: 4, away: 0 }, prediction: "home_win", confidence: 90, odds: { home: 1.35, draw: 4.80, away: 8.50 } },
+  { id: "res4", league: "Premier League", homeTeam: "Everton", awayTeam: "Chelsea", matchDate: "2026-03-21T17:30:00Z", localTime: "Sat Mar 21", status: "final", score: { home: 3, away: 0 }, prediction: "away_win", confidence: 55, odds: { home: 3.40, draw: 3.20, away: 2.10 } },
+  { id: "res5", league: "Premier League", homeTeam: "Aston Villa", awayTeam: "West Ham", matchDate: "2026-03-22T14:15:00Z", localTime: "Sun Mar 22", status: "final", score: { home: 2, away: 0 }, prediction: "home_win", confidence: 70, odds: { home: 1.80, draw: 3.50, away: 4.20 } },
+];
+
+const STORAGE_KEY = "betai_state_v2";
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  return null;
 }
 
-interface Props { user: { name: string; email: string; role: string } }
+function saveState(state) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (_) {}
+}
 
-export default function Dashboard({ user }: Props) {
-  const [filter, setFilter] = useState('All');
-  const [betSlip, setBetSlip] = useState<BetSlipItem[]>([]);
+function calcOddsColor(pred) {
+  if (pred === "home_win") return "#60a5fa";
+  if (pred === "draw") return "#fbbf24";
+  if (pred === "away_win") return "#f87171";
+  return "#34d399";
+}
+
+function confBadge(conf) {
+  if (conf >= 80) return { label: "HIGH", color: "#34d399" };
+  if (conf >= 65) return { label: "MED", color: "#fbbf24" };
+  return { label: "LOW", color: "#f87171" };
+}
+
+function didWin(game, pick) {
+  if (!game.score) return null;
+  const { home, away } = game.score;
+  if (pick === "home_win" && home > away) return true;
+  if (pick === "draw" && home === away) return true;
+  if (pick === "away_win" && away > home) return true;
+  return false;
+}
+
+export default function App() {
+  const saved = loadState();
+  const [balance, setBalance] = useState(saved?.balance ?? 500);
+  const [betSlip, setBetSlip] = useState(saved?.betSlip ?? []);
+  const [betHistory, setBetHistory] = useState(saved?.betHistory ?? []);
+  const [tab, setTab] = useState("upcoming"); // upcoming | results | history
   const [slipOpen, setSlipOpen] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [leagueFilter, setLeagueFilter] = useState("All");
+  const [expanded, setExpanded] = useState(null);
   const [placingBet, setPlacingBet] = useState(false);
   const [betPlaced, setBetPlaced] = useState(false);
-  const [sortBy, setSortBy] = useState<'confidence' | 'time' | 'odds'>('confidence');
-  const [mobileTab, setMobileTab] = useState<'predictions' | 'slip'>('predictions');
+  const [showDeposit, setShowDeposit] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("100");
+  const [editBalance, setEditBalance] = useState(false);
+  const [balanceInput, setBalanceInput] = useState(String(balance));
 
-  const { data, isLoading, mutate, isValidating } = useSWR('/api/predictions', fetcher, {
-    refreshInterval: 300_000,
-    revalidateOnFocus: false,
-  });
+  // Persist state
+  useEffect(() => {
+    saveState({ balance, betSlip, betHistory });
+  }, [balance, betSlip, betHistory]);
 
-  const predictions = data?.predictions || [];
-  const stats = data?.stats || {};
-  const filtered = filter === 'All' ? predictions : predictions.filter((p: any) => p.league === filter);
-  const sorted = [...filtered].sort((a: any, b: any) => {
-    if (sortBy === 'confidence') return b.confidence - a.confidence;
-    if (sortBy === 'time') return new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime();
-    if (sortBy === 'odds') return (b.odds || 1.9) - (a.odds || 1.9);
-    return 0;
-  });
+  const upcoming = REAL_GAMES.filter(g => g.status === "scheduled");
+  const results = REAL_GAMES.filter(g => g.status === "final");
 
-  const totalOdds = betSlip.reduce((acc, b) => acc * (b.odds || 1), 1);
-  const totalStake = betSlip.reduce((acc, b) => acc + (parseFloat(b.stake) || 0), 0);
-  const potentialWin = betSlip.length > 0 ? totalStake * totalOdds : 0;
+  const filteredUpcoming = leagueFilter === "All" ? upcoming : upcoming.filter(g => g.league === leagueFilter);
+  const filteredResults = leagueFilter === "All" ? results : results.filter(g => g.league === leagueFilter);
 
-  const addToBetSlip = (p: any) => {
-    if (betSlip.find(b => b.id === p.id)) {
-      setBetSlip(prev => prev.filter(b => b.id !== p.id));
+  const totalStake = betSlip.reduce((a, b) => a + (parseFloat(b.stake) || 0), 0);
+  const totalOdds = betSlip.reduce((acc, b) => acc * b.odds, 1);
+  const potentialWin = totalStake * totalOdds;
+
+  const isInSlip = (id) => betSlip.some(b => b.id === id);
+
+  const addToSlip = (game, pick) => {
+    const odds = pick === "home_win" ? game.odds.home : pick === "draw" ? game.odds.draw : game.odds.away;
+    if (isInSlip(game.id)) {
+      setBetSlip(prev => prev.filter(b => b.id !== game.id));
     } else {
       setBetSlip(prev => [...prev, {
-        id: p.id, homeTeam: p.homeTeam, awayTeam: p.awayTeam,
-        league: p.league, prediction: p.prediction,
-        odds: p.odds || 1.90, stake: '100',
+        id: game.id, homeTeam: game.homeTeam, awayTeam: game.awayTeam,
+        league: game.league, prediction: pick, odds,
+        stake: "10", matchDate: game.matchDate,
       }]);
       setSlipOpen(true);
     }
   };
 
-  const isInSlip = (id: string) => betSlip.some(b => b.id === id);
-  const updateStake = (id: string, stake: string) => setBetSlip(prev => prev.map(b => b.id === id ? { ...b, stake } : b));
-  const removeFromSlip = (id: string) => setBetSlip(prev => prev.filter(b => b.id !== id));
+  const updateStake = (id, val) => setBetSlip(prev => prev.map(b => b.id === id ? { ...b, stake: val } : b));
+  const removeFromSlip = (id) => setBetSlip(prev => prev.filter(b => b.id !== id));
 
   const handlePlaceBets = async () => {
+    if (totalStake > balance) { alert("Insufficient balance!"); return; }
+    if (betSlip.length === 0) return;
     setPlacingBet(true);
-    await new Promise(r => setTimeout(r, 1800));
+    await new Promise(r => setTimeout(r, 1200));
+    const newEntry = {
+      id: Date.now(),
+      placedAt: new Date().toISOString(),
+      bets: betSlip.map(b => ({ ...b })),
+      totalStake,
+      totalOdds: parseFloat(totalOdds.toFixed(2)),
+      potentialWin: parseFloat(potentialWin.toFixed(2)),
+      status: "pending",
+    };
+    setBetHistory(prev => [newEntry, ...prev]);
+    setBalance(prev => parseFloat((prev - totalStake).toFixed(2)));
+    setBetSlip([]);
     setPlacingBet(false);
     setBetPlaced(true);
-    setTimeout(() => { setBetPlaced(false); setBetSlip([]); setSlipOpen(false); }, 3000);
+    setSlipOpen(false);
+    setTimeout(() => setBetPlaced(false), 3500);
   };
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    window.location.href = '/';
+  const handleDeposit = () => {
+    const amt = parseFloat(depositAmount);
+    if (amt > 0) {
+      setBalance(prev => parseFloat((prev + amt).toFixed(2)));
+      setShowDeposit(false);
+      setDepositAmount("100");
+    }
   };
 
-  const navItems = [
-    { icon: '▦', label: 'Predictions', href: '/dashboard', active: true },
-    { icon: '◎', label: 'Statistics',  href: '/dashboard/stats', active: false },
-    { icon: '◐', label: 'History',     href: '/dashboard/history', active: false },
-    ...(user.role === 'ADMIN' ? [{ icon: '⚙', label: 'Admin', href: '/admin', active: false }] : []),
-  ];
+  const handleBalanceSave = () => {
+    const val = parseFloat(balanceInput);
+    if (!isNaN(val) && val >= 0) setBalance(parseFloat(val.toFixed(2)));
+    setEditBalance(false);
+  };
 
-  const avgConf = predictions.length
-    ? Math.round(predictions.reduce((a: number, p: any) => a + p.confidence, 0) / predictions.length)
-    : 0;
-  const highConf = predictions.filter((p: any) => p.confidence >= 80).length;
+  const settledHistory = betHistory.map(entry => {
+    const bets = entry.bets.map(b => {
+      const game = REAL_GAMES.find(g => g.id === b.id);
+      if (!game || game.status !== "final") return { ...b, result: "pending" };
+      const won = didWin(game, b.prediction);
+      return { ...b, result: won ? "won" : "lost", score: game.score };
+    });
+    const allSettled = bets.every(b => b.result !== "pending");
+    const allWon = bets.every(b => b.result === "won");
+    const status = !allSettled ? "pending" : allWon ? "won" : "lost";
+    return { ...entry, bets, status };
+  });
+
+  // Settle winnings
+  useEffect(() => {
+    setBetHistory(prev => prev.map(entry => {
+      if (entry.status !== "pending" && entry.settled) return entry;
+      const bets = entry.bets.map(b => {
+        const game = REAL_GAMES.find(g => g.id === b.id);
+        if (!game || game.status !== "final") return b;
+        const won = didWin(game, b.prediction);
+        return { ...b, result: won ? "won" : "lost", score: game.score };
+      });
+      const allSettled = bets.every(b => b.result === "won" || b.result === "lost");
+      if (!allSettled) return { ...entry, bets };
+      const allWon = bets.every(b => b.result === "won");
+      if (allWon && !entry.settled) {
+        setBalance(bal => parseFloat((bal + entry.potentialWin).toFixed(2)));
+        return { ...entry, bets, status: "won", settled: true };
+      }
+      return { ...entry, bets, status: allWon ? "won" : "lost", settled: true };
+    }));
+  }, []);
+
+  const leagues = ["All", ...Array.from(new Set(REAL_GAMES.map(g => g.league)))];
+
+  const winRate = (() => {
+    const settled = settledHistory.filter(e => e.status !== "pending");
+    if (!settled.length) return null;
+    return Math.round(settled.filter(e => e.status === "won").length / settled.length * 100);
+  })();
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-void)', fontFamily: 'var(--font-body)', position: 'relative' }}>
-      <div className="mesh-bg"><div className="mesh-orb" /></div>
-
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 40, backdropFilter: 'blur(4px)' }} />
-      )}
-
-      {/* ── Sidebar ── */}
-      <aside style={{
-        width: '220px', background: 'var(--bg-base)', borderRight: '1px solid var(--border)',
-        position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 50,
-        display: 'flex', flexDirection: 'column',
-        transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
-      }} className={`sidebar-desktop ${sidebarOpen ? 'sidebar-open' : ''}`}>
-
-        <div style={{ padding: '0 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px', flexShrink: 0 }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.05rem', letterSpacing: '0.08em' }}>
-            BET<span style={{ color: 'var(--accent)' }}>AI</span>
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.6rem', fontFamily: 'var(--font-display)', letterSpacing: '0.08em', color: 'var(--accent)', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: '999px', padding: '0.2rem 0.5rem' }}>
-            <span className="live-dot" style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
-            LIVE
-          </span>
+    <div style={{ display: "flex", height: "100vh", background: "#09090b", color: "#f4f4f5", fontFamily: "'Segoe UI', system-ui, sans-serif", position: "relative", overflow: "hidden" }}>
+      {/* Sidebar */}
+      <aside style={{ width: 200, background: "#111113", borderRight: "1px solid #27272a", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+        <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #27272a" }}>
+          <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "0.05em" }}>BET<span style={{ color: "#34d399" }}>AI</span></div>
+          <div style={{ fontSize: 10, color: "#52525b", marginTop: 2, letterSpacing: "0.08em" }}>LIVE PREDICTIONS</div>
         </div>
 
-        <div style={{ padding: '1rem 0.75rem', flex: 1, overflowY: 'auto' }}>
-          <p style={{ fontSize: '0.6rem', fontFamily: 'var(--font-display)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', padding: '0 0.5rem', marginBottom: '0.5rem' }}>Main Menu</p>
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-            {navItems.map(item => (
-              <Link key={item.label} href={item.href} className={`sidebar-item ${item.active ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
-                <span style={{ fontSize: '0.85rem', minWidth: '1rem' }}>{item.icon}</span>
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-
-          <p style={{ fontSize: '0.6rem', fontFamily: 'var(--font-display)', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', padding: '0 0.5rem', marginBottom: '0.5rem', marginTop: '1.5rem' }}>Leagues</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-            {[
-              { name: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', key: 'Premier League' },
-              { name: 'La Liga',         flag: '🇪🇸', key: 'La Liga' },
-              { name: 'Bundesliga',      flag: '🇩🇪', key: 'Bundesliga' },
-              { name: 'Serie A',         flag: '🇮🇹', key: 'Serie A' },
-              { name: 'Ligue 1',         flag: '🇫🇷', key: 'Ligue 1' },
-              { name: 'Champions Lg',    flag: '⭐',   key: 'Champions League' },
-            ].map(l => (
-              <button key={l.key} onClick={() => { setFilter(l.key); setSidebarOpen(false); }}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.75rem', borderRadius: '6px', background: filter === l.key ? 'rgba(52,211,153,0.06)' : 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left', fontSize: '0.78rem', color: filter === l.key ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s' }}>
-                <span style={{ fontSize: '0.8rem' }}>{l.flag}</span>
-                {l.name}
-              </button>
-            ))}
-          </div>
-
-          {betSlip.length > 0 && (
-            <div style={{ marginTop: '1.5rem', padding: '0.75rem', background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: '8px' }}>
-              <div style={{ fontSize: '0.6rem', fontFamily: 'var(--font-display)', letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: '0.4rem' }}>BET SLIP</div>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>{betSlip.length} selection{betSlip.length > 1 ? 's' : ''}</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>KES {totalStake.toFixed(0)} → KES {potentialWin.toFixed(0)}</div>
-              <button onClick={() => { setSlipOpen(true); setSidebarOpen(false); }} style={{ marginTop: '0.5rem', width: '100%', padding: '0.4rem', background: 'var(--accent)', border: 'none', borderRadius: '6px', color: '#020408', fontSize: '0.68rem', fontFamily: 'var(--font-display)', fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em' }}>
-                VIEW SLIP →
-              </button>
+        {/* Balance Card */}
+        <div style={{ margin: "12px 10px", background: "#18181b", border: "1px solid #27272a", borderRadius: 10, padding: "12px 14px" }}>
+          <div style={{ fontSize: 10, color: "#71717a", letterSpacing: "0.08em", marginBottom: 4 }}>EUR BALANCE</div>
+          {editBalance ? (
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <input value={balanceInput} onChange={e => setBalanceInput(e.target.value)}
+                style={{ flex: 1, background: "#09090b", border: "1px solid #34d399", borderRadius: 6, padding: "4px 8px", color: "#f4f4f5", fontSize: 14, fontFamily: "monospace", outline: "none", width: "100%" }}
+                onKeyDown={e => e.key === "Enter" && handleBalanceSave()} autoFocus />
+              <button onClick={handleBalanceSave} style={{ background: "#34d399", border: "none", borderRadius: 4, padding: "4px 8px", color: "#09090b", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✓</button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 20, color: "#34d399" }}>€{balance.toFixed(2)}</span>
+              <button onClick={() => { setEditBalance(true); setBalanceInput(String(balance)); }}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#71717a", padding: "2px 4px" }} title="Edit balance">✏️</button>
+            </div>
+          )}
+          <button onClick={() => setShowDeposit(v => !v)}
+            style={{ marginTop: 8, width: "100%", padding: "6px", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.25)", borderRadius: 6, color: "#34d399", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em" }}>
+            + DEPOSIT
+          </button>
+          {showDeposit && (
+            <div style={{ marginTop: 8, display: "flex", gap: 4 }}>
+              <input type="number" value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
+                style={{ flex: 1, background: "#09090b", border: "1px solid #3f3f46", borderRadius: 6, padding: "5px 8px", color: "#f4f4f5", fontSize: 12, fontFamily: "monospace", outline: "none" }} />
+              <button onClick={handleDeposit}
+                style={{ background: "#34d399", border: "none", borderRadius: 6, padding: "5px 10px", color: "#09090b", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>Go</button>
             </div>
           )}
         </div>
 
-        <div style={{ borderTop: '1px solid var(--border)', padding: '0.875rem 1rem', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.625rem' }}>
-            <div style={{ width: '1.875rem', height: '1.875rem', borderRadius: '50%', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0, fontFamily: 'var(--font-display)' }}>
-              {user.name?.[0]?.toUpperCase() || 'U'}
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name || 'User'}</div>
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
-            </div>
+        {/* Nav */}
+        <nav style={{ padding: "4px 8px", flex: 1 }}>
+          {[{ id: "upcoming", label: "Upcoming", icon: "▦" }, { id: "results", label: "Results", icon: "◎" }, { id: "history", label: "My Bets", icon: "◐" }].map(n => (
+            <button key={n.id} onClick={() => setTab(n.id)} style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
+              borderRadius: 7, border: "none", cursor: "pointer", fontSize: 13, fontWeight: tab === n.id ? 600 : 400,
+              background: tab === n.id ? "rgba(52,211,153,0.08)" : "none",
+              color: tab === n.id ? "#34d399" : "#71717a", transition: "all 0.15s",
+              textAlign: "left", marginBottom: 2,
+            }}>
+              <span style={{ fontSize: 14 }}>{n.icon}</span>{n.label}
+              {n.id === "history" && betHistory.length > 0 && (
+                <span style={{ marginLeft: "auto", background: "#34d399", color: "#09090b", borderRadius: 999, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{betHistory.length}</span>
+              )}
+            </button>
+          ))}
+
+          <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #27272a" }}>
+            <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "0.1em", padding: "0 8px", marginBottom: 6 }}>LEAGUES</div>
+            {leagues.map(l => (
+              <button key={l} onClick={() => setLeagueFilter(l)} style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "5px 10px",
+                borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11,
+                background: leagueFilter === l ? "rgba(52,211,153,0.06)" : "none",
+                color: leagueFilter === l ? "#34d399" : "#71717a", textAlign: "left",
+              }}>
+                {LEAGUE_FLAGS[l] && <span style={{ fontSize: 11 }}>{LEAGUE_FLAGS[l]}</span>}
+                {l}
+              </button>
+            ))}
           </div>
-          <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.625rem', borderRadius: '6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--text-muted)', transition: 'color 0.15s' }}
-            onMouseEnter={e => (e.currentTarget.style.color = 'var(--red)')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}>
-            ↗ Sign Out
-          </button>
+        </nav>
+
+        {/* Stats */}
+        <div style={{ padding: "10px", borderTop: "1px solid #27272a" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {[
+              { label: "Win Rate", val: winRate !== null ? `${winRate}%` : "—", color: "#34d399" },
+              { label: "Bets", val: betHistory.length, color: "#60a5fa" },
+            ].map(s => (
+              <div key={s.label} style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 7, padding: "8px 10px" }}>
+                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "0.08em" }}>{s.label.toUpperCase()}</div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: s.color, fontFamily: "monospace" }}>{s.val}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </aside>
 
-      {/* ── Main content ── */}
-      <main style={{ flex: 1, marginLeft: '220px', marginRight: slipOpen ? '300px' : '0', transition: 'margin-right 0.3s ease', position: 'relative', zIndex: 1, minHeight: '100vh' }} className="main-content">
-
-        {/* Top bar */}
-        <header style={{ position: 'sticky', top: 0, zIndex: 30, height: '56px', background: 'rgba(2,4,8,0.95)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)', padding: '0 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <button onClick={() => setSidebarOpen(v => !v)} className="mobile-menu-btn" style={{ display: 'none', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.1rem' }}>☰</button>
-            <div>
-              <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem', letterSpacing: '0.06em', lineHeight: 1 }}>TODAY'S PREDICTIONS</h1>
-              <p style={{ fontSize: '0.67rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-              </p>
-            </div>
+      {/* Main */}
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {/* Topbar */}
+        <header style={{ height: 52, background: "rgba(9,9,11,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid #27272a", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <span style={{ fontWeight: 700, fontSize: 13, letterSpacing: "0.08em", color: "#f4f4f5" }}>
+              {tab === "upcoming" ? "UPCOMING MATCHES" : tab === "results" ? "RECENT RESULTS" : "MY BET HISTORY"}
+            </span>
+            <span style={{ fontSize: 11, color: "#52525b" }}>
+              {new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+            </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-            <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="sort-select"
-              style={{ padding: '0.4rem 0.625rem', borderRadius: '6px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '0.72rem', cursor: 'pointer', outline: 'none', fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>
-              <option value="confidence">↑ CONF</option>
-              <option value="time">↑ TIME</option>
-              <option value="odds">↑ ODDS</option>
-            </select>
-            <button onClick={() => mutate()}
-              style={{ padding: '0.4rem 0.875rem', borderRadius: '6px', background: isValidating ? 'rgba(52,211,153,0.08)' : 'transparent', border: '1px solid var(--border)', color: isValidating ? 'var(--accent)' : 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', transition: 'all 0.15s' }}>
-              <span style={{ display: 'inline-block', animation: isValidating ? 'spin 1s linear infinite' : 'none' }}>↺</span>
-              <span className="refresh-label">Refresh</span>
-            </button>
-            <button onClick={() => setSlipOpen(v => !v)}
-              style={{ padding: '0.4rem 0.875rem', borderRadius: '6px', background: betSlip.length > 0 ? 'var(--accent)' : 'transparent', border: `1px solid ${betSlip.length > 0 ? 'var(--accent)' : 'var(--border)'}`, color: betSlip.length > 0 ? '#020408' : 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: betSlip.length > 0 ? 700 : 400, transition: 'all 0.2s', fontFamily: betSlip.length > 0 ? 'var(--font-display)' : 'var(--font-body)', letterSpacing: betSlip.length > 0 ? '0.03em' : '0' }}>
-              ◫ <span className="slip-label">Bet Slip</span>
-              {betSlip.length > 0 && (
-                <span style={{ background: '#020408', color: 'var(--accent)', borderRadius: '999px', padding: '0.05rem 0.4rem', fontSize: '0.65rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>{betSlip.length}</span>
-              )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {betPlaced && (
+              <span style={{ fontSize: 11, color: "#34d399", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 20, padding: "4px 12px" }}>
+                ✓ Bets placed!
+              </span>
+            )}
+            <button onClick={() => setSlipOpen(v => !v)} style={{
+              padding: "6px 14px", borderRadius: 7, border: `1px solid ${betSlip.length > 0 ? "#34d399" : "#3f3f46"}`,
+              background: betSlip.length > 0 ? "rgba(52,211,153,0.12)" : "transparent",
+              color: betSlip.length > 0 ? "#34d399" : "#71717a", fontSize: 12, fontWeight: 600, cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              ◫ Bet Slip {betSlip.length > 0 && <span style={{ background: "#34d399", color: "#09090b", borderRadius: 999, padding: "1px 7px", fontSize: 10, fontWeight: 800 }}>{betSlip.length}</span>}
             </button>
           </div>
         </header>
 
-        {/* Mobile tab switcher */}
-        <div className="mobile-tabs" style={{ display: 'none', borderBottom: '1px solid var(--border)', background: 'var(--bg-base)' }}>
-          {(['predictions', 'slip'] as const).map(tab => (
-            <button key={tab} onClick={() => setMobileTab(tab)}
-              style={{ flex: 1, padding: '0.75rem', background: 'none', border: 'none', borderBottom: `2px solid ${mobileTab === tab ? 'var(--accent)' : 'transparent'}`, cursor: 'pointer', fontSize: '0.72rem', fontFamily: 'var(--font-display)', letterSpacing: '0.06em', fontWeight: 600, color: mobileTab === tab ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-              {tab === 'slip' && betSlip.length > 0 && <span style={{ background: 'var(--accent)', color: '#020408', borderRadius: '999px', padding: '0.05rem 0.4rem', fontSize: '0.6rem', fontWeight: 700 }}>{betSlip.length}</span>}
-              {tab === 'predictions' ? '▦ Predictions' : '◫ Slip'}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ padding: '1.25rem 1.5rem', maxWidth: '1100px' }} className="main-pad">
-
-          {betPlaced && (
-            <div style={{ marginBottom: '1rem', padding: '1rem 1.25rem', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ fontSize: '1.1rem', color: 'var(--accent)' }}>✓</span>
-              <div>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>BETS PLACED SUCCESSFULLY</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Your selections have been submitted. Good luck!</div>
-              </div>
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+          {tab === "upcoming" && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 12 }}>
+              {filteredUpcoming.map(game => (
+                <GameCard key={game.id} game={game} inSlip={isInSlip(game.id)}
+                  expanded={expanded === game.id}
+                  onToggle={() => setExpanded(expanded === game.id ? null : game.id)}
+                  onAddToSlip={(pick) => addToSlip(game, pick)} />
+              ))}
+              {filteredUpcoming.length === 0 && <EmptyState msg="No upcoming matches for this league." />}
             </div>
           )}
-
-          {/* Stats strip */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }} className="stats-grid">
-            {[
-              { l: 'Win Rate',       v: `${stats.winRate || 74}%`,    c: 'var(--accent)',  icon: '◈', sub: 'Last 30 days' },
-              { l: "Today's Tips",   v: String(predictions.length),   c: 'var(--blue)',    icon: '◎', sub: `${highConf} high confidence` },
-              { l: 'Avg Confidence', v: avgConf ? `${avgConf}%` : '—', c: 'var(--gold)',  icon: '◐', sub: 'Across all tips' },
-              { l: 'Potential Win',  v: betSlip.length > 0 ? `KES ${potentialWin.toFixed(0)}` : '—', c: betSlip.length > 0 ? 'var(--accent)' : 'var(--text-muted)', icon: '◫', sub: betSlip.length > 0 ? `${betSlip.length} selections` : 'Add to slip' },
-            ].map((s, i) => (
-              <div key={i} className="stat-card" style={{ padding: '0.875rem 1rem', cursor: i === 3 && betSlip.length > 0 ? 'pointer' : 'default' }}
-                onClick={i === 3 && betSlip.length > 0 ? () => setSlipOpen(true) : undefined}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.5rem' }}>
-                  <span style={{ color: s.c, fontSize: '0.8rem' }}>{s.icon}</span>
-                  <span style={{ fontSize: '0.6rem', fontFamily: 'var(--font-display)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{s.l}</span>
-                </div>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.4rem', color: s.c, letterSpacing: '-0.01em', lineHeight: 1 }}>{s.v}</div>
-                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>{s.sub}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Filter bar */}
-          <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', marginBottom: '1.25rem', alignItems: 'center' }} className="scrollbar-hide">
-            {FILTERS.map(f => (
-              <button key={f} onClick={() => setFilter(f)} style={{
-                flexShrink: 0, padding: '0.35rem 0.875rem', borderRadius: '999px', fontSize: '0.72rem',
-                fontFamily: 'var(--font-display)', letterSpacing: '0.04em', fontWeight: 600, cursor: 'pointer',
-                transition: 'all 0.15s', border: '1px solid',
-                background: filter === f ? 'rgba(52,211,153,0.12)' : 'transparent',
-                borderColor: filter === f ? 'var(--border-accent)' : 'var(--border)',
-                color: filter === f ? 'var(--accent)' : 'var(--text-muted)',
-                display: 'flex', alignItems: 'center', gap: '0.3rem',
-              }}>
-                {LEAGUE_FLAGS[f] && <span style={{ fontSize: '0.75rem' }}>{LEAGUE_FLAGS[f]}</span>}
-                {f}
-              </button>
-            ))}
-            <span style={{ marginLeft: 'auto', flexShrink: 0, fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-display)', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
-              {sorted.length} match{sorted.length !== 1 ? 'es' : ''}
-            </span>
-          </div>
-
-          {/* Match grid */}
-          {isLoading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.875rem' }}>
-              {[...Array(6)].map((_, i) => (
-                <div key={i} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-                  <div className="shimmer" style={{ height: '0.7rem', width: '35%' }} />
-                  <div className="shimmer" style={{ height: '1.25rem', width: '70%' }} />
-                  <div className="shimmer" style={{ height: '3rem', width: '100%', borderRadius: '8px' }} />
-                  <div className="shimmer" style={{ height: '0.5rem', width: '100%' }} />
-                </div>
-              ))}
+          {tab === "results" && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 12 }}>
+              {filteredResults.map(game => <ResultCard key={game.id} game={game} />)}
+              {filteredResults.length === 0 && <EmptyState msg="No results for this league." />}
             </div>
-          ) : sorted.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '5rem 0' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '1rem', opacity: 0.4 }}>◈</div>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', marginBottom: '0.5rem' }}>No predictions yet</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '1.5rem' }}>Click Refresh to generate today's AI predictions</p>
-              <button onClick={() => mutate()} style={{ padding: '0.6rem 1.5rem', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#020408', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', letterSpacing: '0.05em' }}>
-                ↺ GENERATE
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.875rem' }}>
-              {sorted.map((p: any) => (
-                <MatchCard key={p.id} p={p}
-                  inSlip={isInSlip(p.id)}
-                  expanded={expanded === p.id}
-                  onToggleExpand={() => setExpanded(expanded === p.id ? null : p.id)}
-                  onAddToSlip={() => addToBetSlip(p)}
-                />
-              ))}
+          )}
+          {tab === "history" && (
+            <div style={{ maxWidth: 700 }}>
+              {settledHistory.length === 0 ? (
+                <EmptyState msg="No bets placed yet. Add matches to your slip and place your first bet!" />
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {/* Summary row */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 8 }}>
+                    {[
+                      { label: "Total Wagered", val: `€${settledHistory.reduce((a, e) => a + e.totalStake, 0).toFixed(2)}`, c: "#f4f4f5" },
+                      { label: "Won", val: settledHistory.filter(e => e.status === "won").length, c: "#34d399" },
+                      { label: "Lost", val: settledHistory.filter(e => e.status === "lost").length, c: "#f87171" },
+                    ].map(s => (
+                      <div key={s.label} style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 10, padding: "12px 16px" }}>
+                        <div style={{ fontSize: 10, color: "#52525b", letterSpacing: "0.08em" }}>{s.label.toUpperCase()}</div>
+                        <div style={{ fontWeight: 700, fontSize: 20, color: s.c, fontFamily: "monospace" }}>{s.val}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {settledHistory.map(entry => (
+                    <div key={entry.id} style={{ background: "#111113", border: `1px solid ${entry.status === "won" ? "rgba(52,211,153,0.3)" : entry.status === "lost" ? "rgba(248,113,113,0.2)" : "#27272a"}`, borderRadius: 12, overflow: "hidden" }}>
+                      <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #27272a" }}>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#52525b", marginBottom: 2 }}>{new Date(entry.placedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600 }}>{entry.bets.length} selection{entry.bets.length > 1 ? "s" : ""} · Acca {entry.totalOdds.toFixed(2)}x</div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 10, color: "#52525b" }}>Stake / Return</div>
+                          <div style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 700 }}>
+                            €{entry.totalStake.toFixed(2)} → <span style={{ color: entry.status === "won" ? "#34d399" : entry.status === "lost" ? "#f87171" : "#fbbf24" }}>€{entry.potentialWin.toFixed(2)}</span>
+                          </div>
+                        </div>
+                        <div style={{ padding: "4px 12px", borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+                          background: entry.status === "won" ? "rgba(52,211,153,0.15)" : entry.status === "lost" ? "rgba(248,113,113,0.12)" : "rgba(251,191,36,0.1)",
+                          color: entry.status === "won" ? "#34d399" : entry.status === "lost" ? "#f87171" : "#fbbf24",
+                          border: `1px solid ${entry.status === "won" ? "rgba(52,211,153,0.3)" : entry.status === "lost" ? "rgba(248,113,113,0.2)" : "rgba(251,191,36,0.2)"}` }}>
+                          {entry.status.toUpperCase()}
+                        </div>
+                      </div>
+                      <div style={{ padding: "8px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                        {entry.bets.map((b, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12 }}>
+                            <div style={{ flex: 1 }}>
+                              <span style={{ color: "#a1a1aa" }}>{LEAGUE_FLAGS[b.league]} </span>
+                              <span style={{ color: "#d4d4d8" }}>{b.homeTeam} vs {b.awayTeam}</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ color: calcOddsColor(b.prediction), fontWeight: 600, fontSize: 11 }}>
+                                {PRED_LABELS[b.prediction]?.long || b.prediction}
+                              </span>
+                              <span style={{ fontFamily: "monospace", color: "#fbbf24", fontSize: 11 }}>{b.odds.toFixed(2)}</span>
+                              {b.result === "pending" && b.score == null && <span style={{ fontSize: 10, color: "#fbbf24" }}>⏳</span>}
+                              {b.result === "won" && <span style={{ fontSize: 12, color: "#34d399" }}>✓</span>}
+                              {b.result === "lost" && (
+                                <span style={{ fontSize: 10, color: "#f87171" }}>
+                                  ✗ {b.score ? `${b.score.home}-${b.score.away}` : ""}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
       </main>
 
-      {/* ── Bet Slip Panel ── */}
+      {/* Bet Slip Panel */}
       <aside style={{
-        width: '300px', background: 'var(--bg-base)', borderLeft: '1px solid var(--border)',
-        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 50,
-        display: 'flex', flexDirection: 'column',
-        transform: slipOpen ? 'translateX(0)' : 'translateX(100%)',
-        transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
-      }} className="slip-panel">
-
-        {/* Slip header */}
-        <div style={{ padding: '0 1.25rem', height: '56px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.9rem', letterSpacing: '0.05em' }}>BET SLIP</span>
-            {betSlip.length > 0 && (
-              <span style={{ background: 'var(--accent)', color: '#020408', borderRadius: '999px', padding: '0.1rem 0.5rem', fontSize: '0.65rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>{betSlip.length}</span>
-            )}
+        width: 280, background: "#111113", borderLeft: "1px solid #27272a",
+        display: "flex", flexDirection: "column",
+        transform: slipOpen ? "translateX(0)" : "translateX(100%)",
+        transition: "transform 0.3s cubic-bezier(0.4,0,0.2,1)",
+        position: "absolute", top: 0, right: 0, bottom: 0, zIndex: 50,
+      }}>
+        <div style={{ height: 52, padding: "0 14px", borderBottom: "1px solid #27272a", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 13, letterSpacing: "0.06em" }}>BET SLIP</span>
+            {betSlip.length > 0 && <span style={{ background: "#34d399", color: "#09090b", borderRadius: 999, padding: "1px 7px", fontSize: 10, fontWeight: 800 }}>{betSlip.length}</span>}
           </div>
-          {/* BUG FIX: `align` → `alignItems` */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {betSlip.length > 0 && (
-              <button onClick={() => setBetSlip([])} style={{ fontSize: '0.7rem', color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', letterSpacing: '0.05em' }}>CLEAR</button>
-            )}
-            <button onClick={() => setSlipOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.1rem', lineHeight: 1, padding: '0.25rem' }}>×</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {betSlip.length > 0 && <button onClick={() => setBetSlip([])} style={{ fontSize: 10, color: "#f87171", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>CLEAR</button>}
+            <button onClick={() => setSlipOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#71717a", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}>×</button>
           </div>
         </div>
 
-        {/* Slip items */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0.875rem' }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: 10 }}>
           {betSlip.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '1rem', opacity: 0.2 }}>◫</div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', lineHeight: 1.6 }}>
-                Click <strong style={{ color: 'var(--text-secondary)' }}>Add to Slip</strong> on any prediction to build your bet
-              </p>
+            <div style={{ textAlign: "center", padding: "40px 16px", color: "#52525b", fontSize: 12, lineHeight: 1.8 }}>
+              <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◫</div>
+              Click any odds button on a match to add to your slip
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {betSlip.map(bet => {
-                const predInfo = PRED_LABELS[bet.prediction];
+                const pred = PRED_LABELS[bet.prediction];
                 return (
-                  <div key={bet.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '10px', padding: '0.875rem', position: 'relative' }}>
-                    <button onClick={() => removeFromSlip(bet.id)} style={{ position: 'absolute', top: '0.625rem', right: '0.625rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1 }}>×</button>
-                    <div style={{ fontSize: '0.62rem', fontFamily: 'var(--font-display)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                      {LEAGUE_FLAGS[bet.league] && <span>{LEAGUE_FLAGS[bet.league]}</span>}
-                      {bet.league}
-                    </div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.25rem', paddingRight: '1.5rem' }}>{bet.homeTeam} vs {bet.awayTeam}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                      <span style={{ fontSize: '0.72rem', color: predInfo?.color || 'var(--accent)', fontWeight: 600, fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>{predInfo?.long || bet.prediction}</span>
-                      <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--gold)', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: '4px', padding: '0.1rem 0.4rem' }}>{bet.odds.toFixed(2)}</span>
+                  <div key={bet.id} style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#52525b", marginBottom: 2 }}>{LEAGUE_FLAGS[bet.league]} {bet.league}</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#d4d4d8" }}>{bet.homeTeam} vs {bet.awayTeam}</div>
+                        <div style={{ fontSize: 11, color: pred?.color || "#34d399", fontWeight: 600, marginTop: 2 }}>{pred?.long || bet.prediction} @ {bet.odds.toFixed(2)}</div>
+                      </div>
+                      <button onClick={() => removeFromSlip(bet.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#52525b", fontSize: 16, lineHeight: 1, padding: "0 2px" }}>×</button>
                     </div>
                     <div>
-                      <label style={{ fontSize: '0.6rem', fontFamily: 'var(--font-display)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '0.35rem' }}>Stake (KES)</label>
-                      <div style={{ display: 'flex', gap: '0.375rem' }}>
-                        <input type="number" min="1" value={bet.stake}
-                          onChange={e => updateStake(bet.id, e.target.value)}
-                          style={{ flex: 1, background: 'var(--bg-void)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.5rem 0.625rem', color: 'var(--text-primary)', fontSize: '0.85rem', fontFamily: 'var(--font-mono)', outline: 'none' }} />
-                        <div style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: '6px', padding: '0.5rem 0.5rem', fontSize: '0.72rem', color: 'var(--accent)', display: 'flex', alignItems: 'center', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>
-                          = {((parseFloat(bet.stake) || 0) * bet.odds).toFixed(0)}
+                      <div style={{ fontSize: 10, color: "#52525b", marginBottom: 4 }}>STAKE (€)</div>
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <input type="number" min="0.5" step="0.5" value={bet.stake} onChange={e => updateStake(bet.id, e.target.value)}
+                          style={{ flex: 1, background: "#09090b", border: "1px solid #3f3f46", borderRadius: 6, padding: "5px 8px", color: "#f4f4f5", fontSize: 13, fontFamily: "monospace", outline: "none" }} />
+                        <div style={{ fontSize: 11, color: "#34d399", fontFamily: "monospace", background: "rgba(52,211,153,0.08)", padding: "5px 8px", borderRadius: 6, border: "1px solid rgba(52,211,153,0.15)" }}>
+                          =€{((parseFloat(bet.stake) || 0) * bet.odds).toFixed(2)}
                         </div>
                       </div>
-                      {/* Quick stake presets */}
-                      <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.375rem' }}>
-                        {[50, 100, 500, 1000].map(amt => (
-                          <button key={amt} onClick={() => updateStake(bet.id, String(amt))}
-                            style={{ flex: 1, padding: '0.25rem', border: '1px solid var(--border)', borderRadius: '4px', background: 'none', color: 'var(--text-muted)', fontSize: '0.62rem', cursor: 'pointer', fontFamily: 'var(--font-display)', transition: 'all 0.15s' }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                            {amt >= 1000 ? `${amt/1000}K` : amt}
-                          </button>
+                      <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
+                        {[5, 10, 25, 50].map(a => (
+                          <button key={a} onClick={() => updateStake(bet.id, String(a))} style={{
+                            flex: 1, padding: "3px 0", border: "1px solid #27272a", borderRadius: 4,
+                            background: "none", color: "#71717a", fontSize: 10, cursor: "pointer",
+                          }}>€{a}</button>
                         ))}
                       </div>
                     </div>
@@ -414,224 +480,210 @@ export default function Dashboard({ user }: Props) {
           )}
         </div>
 
-        {/* Slip footer */}
         {betSlip.length > 0 && (
-          <div style={{ borderTop: '1px solid var(--border)', padding: '1rem 1.25rem', flexShrink: 0 }}>
-            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem', marginBottom: '0.875rem' }}>
+          <div style={{ borderTop: "1px solid #27272a", padding: "12px 14px", flexShrink: 0 }}>
+            <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
               {betSlip.length > 1 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.375rem' }}>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Acca odds</span>
-                  <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--gold)' }}>{totalOdds.toFixed(2)}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, color: "#71717a" }}>Acca odds</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#fbbf24", fontSize: 12 }}>{totalOdds.toFixed(2)}x</span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.375rem' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Total stake</span>
-                <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>KES {totalStake.toFixed(0)}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: "#71717a" }}>Total stake</span>
+                <span style={{ fontFamily: "monospace", fontSize: 12, color: "#d4d4d8" }}>€{totalStake.toFixed(2)}</span>
               </div>
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.375rem', display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Potential win</span>
-                <span style={{ fontSize: '0.875rem', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent)' }}>KES {potentialWin.toFixed(0)}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: "#71717a" }}>Balance after</span>
+                <span style={{ fontFamily: "monospace", fontSize: 12, color: totalStake > balance ? "#f87171" : "#a1a1aa" }}>€{(balance - totalStake).toFixed(2)}</span>
+              </div>
+              <div style={{ borderTop: "1px solid #27272a", paddingTop: 6, display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#a1a1aa" }}>Potential win</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 800, color: "#34d399", fontSize: 14 }}>€{potentialWin.toFixed(2)}</span>
               </div>
             </div>
-            <button onClick={handlePlaceBets} disabled={placingBet}
-              style={{ width: '100%', padding: '0.875rem', background: placingBet ? 'rgba(52,211,153,0.5)' : 'var(--accent)', border: 'none', borderRadius: '8px', color: '#020408', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.875rem', letterSpacing: '0.05em', cursor: placingBet ? 'not-allowed' : 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-              {placingBet ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>◌</span> PLACING...</> : <>PLACE BET{betSlip.length > 1 ? 'S' : ''} ({betSlip.length})</>}
+            {totalStake > balance && (
+              <div style={{ fontSize: 11, color: "#f87171", textAlign: "center", marginBottom: 8 }}>⚠ Insufficient balance</div>
+            )}
+            <button onClick={handlePlaceBets} disabled={placingBet || totalStake > balance || totalStake <= 0} style={{
+              width: "100%", padding: "12px", background: placingBet || totalStake > balance ? "rgba(52,211,153,0.35)" : "#34d399",
+              border: "none", borderRadius: 8, color: "#09090b", fontWeight: 800, fontSize: 13,
+              letterSpacing: "0.05em", cursor: placingBet || totalStake > balance ? "not-allowed" : "pointer", transition: "all 0.2s",
+            }}>
+              {placingBet ? "⏳ PLACING..." : `PLACE BET${betSlip.length > 1 ? "S" : ""} (${betSlip.length})`}
             </button>
-            <p style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.5rem', lineHeight: 1.5 }}>
-              AI predictions only · Bet responsibly · 18+
-            </p>
+            <p style={{ fontSize: 10, color: "#52525b", textAlign: "center", marginTop: 6, lineHeight: 1.6 }}>AI predictions · Bet responsibly · 18+</p>
           </div>
         )}
       </aside>
-
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @media (min-width: 1024px) { .sidebar-desktop { transform: translateX(0) !important; } }
-        @media (max-width: 1023px) {
-          .sidebar-desktop { transform: translateX(-100%); }
-          .sidebar-open { transform: translateX(0) !important; }
-          .main-content { margin-left: 0 !important; }
-          .mobile-menu-btn { display: flex !important; }
-          .main-pad { padding: 0.875rem 1rem !important; }
-          .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
-          .slip-panel { width: 100% !important; }
-          .sort-select { display: none !important; }
-          .refresh-label { display: none; }
-          .slip-label { display: none; }
-          .mobile-tabs { display: flex !important; }
-        }
-        @media (max-width: 1300px) { .main-content { margin-right: 0 !important; } }
-        @media (max-width: 480px) {
-          .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
-          .main-pad { padding: 0.75rem !important; }
-        }
-      `}</style>
     </div>
   );
 }
 
-function MatchCard({ p, inSlip, expanded, onToggleExpand, onAddToSlip }: {
-  p: any; inSlip: boolean; expanded: boolean; onToggleExpand: () => void; onAddToSlip: () => void;
-}) {
-  const conf = p.confidence;
-  const confColor = conf >= 80 ? 'var(--accent)' : conf >= 65 ? 'var(--gold)' : 'var(--red)';
-  const confLabel = conf >= 80 ? 'HIGH' : conf >= 65 ? 'MED' : 'LOW';
-  const pred = PRED_LABELS[p.prediction];
-  const matchDate = new Date(p.matchDate);
-  const isToday = matchDate.toDateString() === new Date().toDateString();
-  const timeStr = matchDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  const dateStr = isToday ? 'Today' : matchDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  const odds = p.odds || 1.90;
+function GameCard({ game, inSlip, expanded, onToggle, onAddToSlip }) {
+  const badge = confBadge(game.confidence);
+  const pred = PRED_LABELS[game.prediction];
 
   return (
-    <div className="fade-up" style={{
-      background: 'var(--bg-card)', border: `1px solid ${inSlip ? 'rgba(52,211,153,0.35)' : 'var(--border)'}`,
-      borderRadius: '12px', overflow: 'hidden', transition: 'all 0.2s ease',
-      boxShadow: inSlip ? '0 0 0 1px rgba(52,211,153,0.15), 0 4px 20px rgba(52,211,153,0.05)' : 'none',
+    <div style={{
+      background: "#111113", border: `1px solid ${inSlip ? "rgba(52,211,153,0.35)" : "#27272a"}`,
+      borderRadius: 12, overflow: "hidden", transition: "all 0.2s",
+      boxShadow: inSlip ? "0 0 0 1px rgba(52,211,153,0.12)" : "none",
     }}>
-      <div style={{ padding: '0.875rem 1rem 0' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.875rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            {LEAGUE_FLAGS[p.league] && <span style={{ fontSize: '0.75rem' }}>{LEAGUE_FLAGS[p.league]}</span>}
-            <span style={{ fontSize: '0.62rem', fontFamily: 'var(--font-display)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{p.league}</span>
+      <div style={{ padding: "12px 14px 0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ fontSize: 11 }}>{LEAGUE_FLAGS[game.league]}</span>
+            <span style={{ fontSize: 10, color: "#71717a", letterSpacing: "0.07em" }}>{game.league}</span>
           </div>
-          {/* BUG FIX: `align` → `alignItems` */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-            <span style={{ fontSize: '0.6rem', color: confColor, fontFamily: 'var(--font-display)', letterSpacing: '0.06em', background: `${confColor}18`, border: `1px solid ${confColor}30`, borderRadius: '4px', padding: '0.1rem 0.35rem' }}>{confLabel}</span>
-            <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>{dateStr} · {timeStr}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 9, color: badge.color, background: `${badge.color}18`, border: `1px solid ${badge.color}30`, borderRadius: 4, padding: "2px 6px", fontWeight: 700 }}>{badge.label}</span>
+            <span style={{ fontSize: 10, color: "#52525b", fontFamily: "monospace" }}>{game.localTime}</span>
           </div>
         </div>
 
-        {/* Teams row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: 1.2 }}>{p.homeTeam}</div>
-            <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>HOME</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 6, alignItems: "center", marginBottom: 12 }}>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#f4f4f5" }}>{game.homeTeam}</div>
+            <div style={{ fontSize: 9, color: "#52525b", marginTop: 2 }}>HOME</div>
           </div>
-          <div style={{ textAlign: 'center', padding: '0.375rem 0.625rem', background: 'var(--bg-elevated)', borderRadius: '6px', fontSize: '0.7rem', fontFamily: 'var(--font-display)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>VS</div>
+          <div style={{ textAlign: "center", padding: "4px 8px", background: "#18181b", borderRadius: 5, fontSize: 10, color: "#52525b", letterSpacing: "0.06em" }}>VS</div>
           <div>
-            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.2 }}>{p.awayTeam}</div>
-            <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>AWAY</div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: "#a1a1aa" }}>{game.awayTeam}</div>
+            <div style={{ fontSize: 9, color: "#52525b", marginTop: 2 }}>AWAY</div>
           </div>
         </div>
+
+        {/* Win prob bar */}
+        {game.winProb && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ display: "flex", borderRadius: 4, overflow: "hidden", height: 5 }}>
+              <div style={{ width: `${game.winProb.home}%`, background: "#60a5fa" }} />
+              <div style={{ width: `${game.winProb.draw}%`, background: "#fbbf24" }} />
+              <div style={{ width: `${game.winProb.away}%`, background: "#f87171" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3, fontSize: 9, color: "#52525b" }}>
+              <span style={{ color: "#60a5fa" }}>{game.winProb.home}%</span>
+              <span style={{ color: "#fbbf24" }}>Draw {game.winProb.draw}%</span>
+              <span style={{ color: "#f87171" }}>{game.winProb.away}%</span>
+            </div>
+          </div>
+        )}
 
         {/* Odds buttons */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.375rem', marginBottom: '0.875rem' }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
           {[
-            { label: '1', sublabel: 'Home', val: p.odds?.home || (p.prediction === 'home_win' ? odds : null), pred: 'home_win' },
-            { label: 'X', sublabel: 'Draw', val: p.odds?.draw || (p.prediction === 'draw' ? odds : null), pred: 'draw' },
-            { label: '2', sublabel: 'Away', val: p.odds?.away || (p.prediction === 'away_win' ? odds : null), pred: 'away_win' },
-          ].map((o) => {
-            const isAI = p.prediction === o.pred;
+            { label: "1", sublabel: "Home", val: game.odds.home, pick: "home_win", color: "#60a5fa" },
+            { label: "X", sublabel: "Draw", val: game.odds.draw, pick: "draw", color: "#fbbf24" },
+            { label: "2", sublabel: "Away", val: game.odds.away, pick: "away_win", color: "#f87171" },
+          ].map(o => {
+            const isAI = game.prediction === o.pick;
             return (
-              <button key={o.label} onClick={onAddToSlip}
-                style={{ padding: '0.5rem 0.375rem', borderRadius: '7px', border: `1px solid ${isAI ? 'rgba(52,211,153,0.4)' : 'var(--border)'}`, background: isAI ? 'rgba(52,211,153,0.08)' : 'var(--bg-elevated)', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-accent)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = isAI ? 'rgba(52,211,153,0.4)' : 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-                <div style={{ fontSize: '0.62rem', color: isAI ? 'var(--accent)' : 'var(--text-muted)', fontFamily: 'var(--font-display)', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>{o.label}</div>
-                <div style={{ fontSize: '0.82rem', fontFamily: 'var(--font-mono)', fontWeight: 700, color: isAI ? 'var(--accent)' : 'var(--text-primary)' }}>
-                  {o.val ? (typeof o.val === 'number' ? o.val.toFixed(2) : o.val) : '—'}
-                </div>
-                {isAI && <div style={{ fontSize: '0.5rem', color: 'var(--accent)', fontFamily: 'var(--font-display)', letterSpacing: '0.04em', marginTop: '0.15rem' }}>AI ✓</div>}
+              <button key={o.label} onClick={() => onAddToSlip(o.pick)} style={{
+                padding: "7px 5px", borderRadius: 7,
+                border: `1px solid ${isAI ? `${o.color}60` : "#27272a"}`,
+                background: isAI ? `${o.color}12` : "#18181b",
+                cursor: "pointer", textAlign: "center", transition: "all 0.15s",
+              }}>
+                <div style={{ fontSize: 9, color: isAI ? o.color : "#52525b", letterSpacing: "0.05em", marginBottom: 2 }}>{o.label}</div>
+                <div style={{ fontSize: 14, fontFamily: "monospace", fontWeight: 700, color: isAI ? o.color : "#d4d4d8" }}>{o.val.toFixed(2)}</div>
+                {isAI && <div style={{ fontSize: 8, color: o.color, marginTop: 2 }}>AI ✓</div>}
               </button>
             );
           })}
         </div>
 
-        {/* Prediction badge */}
-        {pred && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(52,211,153,0.04)', border: '1px solid rgba(52,211,153,0.1)', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: confColor, display: 'inline-block', flexShrink: 0 }} />
-              <span style={{ fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 600, fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>{pred.long}</span>
-            </div>
-            <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--gold)', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: '4px', padding: '0.1rem 0.375rem' }}>
-              {typeof odds === 'number' ? odds.toFixed(2) : odds}
-            </span>
+        {/* Confidence bar */}
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 9, color: "#52525b", letterSpacing: "0.06em" }}>AI CONFIDENCE</span>
+            <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: badge.color }}>{game.confidence}%</span>
           </div>
-        )}
-
-        {/* Confidence */}
-        <div style={{ marginBottom: '0.875rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-            <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontFamily: 'var(--font-display)', letterSpacing: '0.06em' }}>AI CONFIDENCE</span>
-            <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', fontWeight: 700, color: confColor }}>{conf}%</span>
-          </div>
-          <div className="conf-bar">
-            <div className="conf-bar-fill" style={{ width: `${conf}%`, background: confColor }} />
+          <div style={{ height: 3, background: "#27272a", borderRadius: 99, overflow: "hidden" }}>
+            <div style={{ width: `${game.confidence}%`, height: "100%", background: badge.color, transition: "width 0.5s ease" }} />
           </div>
         </div>
       </div>
 
-      {/* Action bar */}
-      <div style={{ display: 'flex', borderTop: '1px solid var(--border)' }}>
-        <button onClick={onAddToSlip} style={{
-          flex: 1, padding: '0.625rem 1rem', background: inSlip ? 'rgba(52,211,153,0.08)' : 'transparent',
-          border: 'none', borderRight: '1px solid var(--border)', cursor: 'pointer', fontSize: '0.72rem',
-          fontFamily: 'var(--font-display)', fontWeight: 600, letterSpacing: '0.06em',
-          color: inSlip ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
+      <div style={{ display: "flex", borderTop: "1px solid #27272a" }}>
+        <button onClick={() => onAddToSlip(game.prediction)} style={{
+          flex: 1, padding: "8px 12px", background: inSlip ? "rgba(52,211,153,0.07)" : "transparent",
+          border: "none", borderRight: "1px solid #27272a", cursor: "pointer", fontSize: 10,
+          fontWeight: 700, letterSpacing: "0.06em", color: inSlip ? "#34d399" : "#71717a", transition: "all 0.15s",
         }}>
-          {inSlip ? '✓ IN SLIP' : '+ ADD TO SLIP'}
+          {inSlip ? "✓ IN SLIP" : "+ ADD TO SLIP"}
         </button>
-        <button onClick={onToggleExpand} style={{
-          padding: '0.625rem 0.875rem', background: 'transparent', border: 'none', cursor: 'pointer',
-          fontSize: '0.7rem', color: 'var(--text-muted)', transition: 'all 0.15s', fontFamily: 'var(--font-display)', letterSpacing: '0.05em',
-          display: 'flex', alignItems: 'center', gap: '0.25rem',
+        <button onClick={onToggle} style={{
+          padding: "8px 12px", background: "transparent", border: "none", cursor: "pointer",
+          fontSize: 10, color: "#52525b", transition: "all 0.15s",
         }}>
-          {expanded ? '▲' : '▼'} ANALYSIS
+          {expanded ? "▲" : "▼"} INFO
         </button>
       </div>
 
-      {/* Expanded analysis */}
-      {expanded && (
-        <div style={{ padding: '0.875rem 1rem', borderTop: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)' }}>
-          {p.aiAnalysis ? (
-            <>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.75, marginBottom: '0.75rem' }}>{p.aiAnalysis}</p>
-              {p.tips?.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                  {p.tips.map((tip: string, i: number) => (
-                    <div key={i} style={{ display: 'flex', gap: '0.5rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      <span style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '0.05rem' }}>›</span>
-                      <span>{tip}</span>
-                    </div>
-                  ))}
+      {expanded && game.aiAnalysis && (
+        <div style={{ padding: "12px 14px", borderTop: "1px solid #27272a", background: "rgba(0,0,0,0.2)" }}>
+          <p style={{ fontSize: 11, color: "#a1a1aa", lineHeight: 1.7, marginBottom: 8 }}>{game.aiAnalysis}</p>
+          {game.tips && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {game.tips.map((t, i) => (
+                <div key={i} style={{ display: "flex", gap: 6, fontSize: 11, color: "#71717a" }}>
+                  <span style={{ color: "#34d399", flexShrink: 0 }}>›</span><span>{t}</span>
                 </div>
-              )}
-            </>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '1rem 0', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-              No analysis available for this match.
+              ))}
             </div>
           )}
-          {/* Form stats row */}
-          <div style={{ marginTop: '0.875rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', textAlign: 'center' }}>
-            {[
-              { label: 'Home Form', val: p.homeForm || '—' },
-              { label: 'H2H', val: p.h2h || '—' },
-              { label: 'Away Form', val: p.awayForm || '—' },
-            ].map(stat => (
-              <div key={stat.label}>
-                <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontFamily: 'var(--font-display)', letterSpacing: '0.08em', marginBottom: '0.2rem' }}>{stat.label}</div>
-                <div style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-secondary)' }}>{stat.val}</div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const session = await getSession(ctx.req);
-  if (!session) return { redirect: { destination: '/auth/login', permanent: false } };
-  const prisma = (await import('../../lib/prisma')).default;
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { name: true, email: true, role: true, isActive: true },
-  });
-  if (!user || !user.isActive) return { redirect: { destination: '/auth/login', permanent: false } };
-  return { props: { user: { name: user.name || '', email: user.email, role: user.role } } };
-};
+function ResultCard({ game }) {
+  const { home, away } = game.score || { home: 0, away: 0 };
+  const homeWon = home > away;
+  const awayWon = away > home;
+  const isDraw = home === away;
+
+  return (
+    <div style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 12, padding: "12px 14px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span>{LEAGUE_FLAGS[game.league]}</span>
+          <span style={{ fontSize: 10, color: "#71717a" }}>{game.league}</span>
+        </div>
+        <span style={{ fontSize: 9, color: "#52525b", fontFamily: "monospace" }}>{game.localTime}</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, alignItems: "center" }}>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontWeight: homeWon ? 800 : 500, fontSize: 13, color: homeWon ? "#f4f4f5" : "#71717a" }}>{game.homeTeam}</div>
+        </div>
+        <div style={{ textAlign: "center", padding: "6px 10px", background: "#18181b", borderRadius: 6 }}>
+          <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 16, color: isDraw ? "#fbbf24" : "#f4f4f5" }}>{home} – {away}</div>
+          <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "0.06em", marginTop: 2 }}>FT</div>
+        </div>
+        <div>
+          <div style={{ fontWeight: awayWon ? 800 : 500, fontSize: 13, color: awayWon ? "#f4f4f5" : "#71717a" }}>{game.awayTeam}</div>
+        </div>
+      </div>
+      {game.prediction && (
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 8px", background: "#18181b", borderRadius: 6 }}>
+          <span style={{ fontSize: 10, color: "#52525b" }}>AI predicted: <span style={{ color: calcOddsColor(game.prediction) }}>{PRED_LABELS[game.prediction]?.long}</span></span>
+          {(() => {
+            const won = didWin(game, game.prediction);
+            return <span style={{ fontSize: 11, fontWeight: 700, color: won ? "#34d399" : "#f87171" }}>{won ? "✓ Correct" : "✗ Wrong"}</span>;
+          })()}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ msg }) {
+  return (
+    <div style={{ textAlign: "center", padding: "60px 20px", color: "#52525b", gridColumn: "1/-1" }}>
+      <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>◈</div>
+      <p style={{ fontSize: 13, lineHeight: 1.7 }}>{msg}</p>
+    </div>
+  );
+}
