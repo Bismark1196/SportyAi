@@ -649,18 +649,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ═══════════════════ TOAST ════════════════════════════════ */}
-      {toast&&(
-        <div style={{position:"fixed",top:64,right:14,zIndex:200,
-          background:toast.type==="err"?"#2a0808":toast.type==="mega"?"#1f1200":COLORS.bg2,
-          border:`1px solid ${toast.type==="err"?COLORS.red:toast.type==="mega"?COLORS.orange:COLORS.greenBorder}`,
-          color:toast.type==="err"?COLORS.red:toast.type==="mega"?COLORS.orange:COLORS.green,
-          borderRadius:10,padding:"9px 14px",fontSize:12,fontWeight:700,
-          animation:"toastIn .25s ease",maxWidth:260,zIndex:300}}>
-          {toast.msg}
-        </div>
-      )}
-
       {/* ═══════════════════ MAIN CONTENT ════════════════════════ */}
       <div className="main-area" style={{position:"relative"}}>
 
