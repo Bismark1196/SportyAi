@@ -37,7 +37,7 @@ const MEGA = [
     kick:"2026-04-11T16:30:00Z", display:"Sat 11 Apr · 19:30 EAT",
     pick:"away_win", pickLabel:"Bayern Win", odds:1.30, conf:94,
     analysis:"St. Pauli have the worst home record in the Bundesliga. Bayern have won 11 consecutive away games and are in a title race. This is as close to a certainty as football allows.",
-    tips:["Bayern: 11 consecutive away wins","St. Pauli: worst home record in Bundesliga","Bayern scored 3+ in 9 of last 10 away games"] },
+    tips:["Bayern: 11 consecutive away wins","St.Pauli: worst home record in Bundesliga","Bayern scored 3+ in 9 of last 10 away games"] },
 ];
 
 const GAMES = [
@@ -283,6 +283,38 @@ const didWin = (g, p) => {
   return null;
 };
 
+/* ── DATE HELPERS ─────────────────────────────────────────── */
+const toDateKey = isoStr => isoStr.slice(0, 10); // "YYYY-MM-DD"
+
+const formatDateLabel = isoDateKey => {
+  const d = new Date(isoDateKey + "T12:00:00Z");
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+  if (isoDateKey === todayKey) return "TODAY";
+  if (isoDateKey === tomorrowKey) return "TOMORROW";
+  return d.toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short" }).toUpperCase();
+};
+
+const getTodayKey = () => new Date().toISOString().slice(0, 10);
+
+/* Groups games by date, returns sorted array of { dateKey, label, games } */
+const groupByDate = (games) => {
+  const map = {};
+  games.forEach(g => {
+    const key = toDateKey(g.kick);
+    if (!map[key]) map[key] = [];
+    map[key].push(g);
+  });
+  return Object.keys(map).sort().map(dateKey => ({
+    dateKey,
+    label: formatDateLabel(dateKey),
+    games: map[dateKey],
+  }));
+};
+
 const CATS = ["All","UCL","EPL","La Liga","Bundesliga"];
 const LEAGUES_LABEL = { UCL:"Champions League", EPL:"Premier League", "La Liga":"La Liga", "Bundesliga":"Bundesliga" };
 
@@ -318,7 +350,6 @@ export default function App() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch (_) {}
-    // Clear persisted state
     try { localStorage.removeItem(LS); } catch (_) {}
     router.push("/");
   }
@@ -395,7 +426,21 @@ export default function App() {
 
   const avgConf = upcoming.length ? Math.round(upcoming.reduce((a, g) => a + g.conf, 0) / upcoming.length) : 0;
 
-  /* shared logout button style — fits inline with existing sidebar/topbar elements */
+  // Date-grouped data
+  const upGrouped  = groupByDate(upGames);
+  const resGrouped = groupByDate(resGames);
+
+  // Today's mega picks only
+  const todayKey = getTodayKey();
+  const todayMega = MEGA.filter(m => toDateKey(m.kick) === todayKey);
+  // If no mega picks today, show the next upcoming date's mega picks
+  const nextMegaDateKey = todayMega.length === 0
+    ? (MEGA.map(m => toDateKey(m.kick)).filter(k => k >= todayKey).sort()[0] || null)
+    : null;
+  const displayedMega = todayMega.length > 0 ? todayMega : (nextMegaDateKey ? MEGA.filter(m => toDateKey(m.kick) === nextMegaDateKey) : []);
+  const megaDateLabel = todayMega.length > 0 ? "TODAY" : (nextMegaDateKey ? formatDateLabel(nextMegaDateKey) : "");
+  const megaCount = displayedMega.length;
+
   const logoutBtnStyle = {
     display:"flex", alignItems:"center", gap:6,
     fontSize:11, fontWeight:700, letterSpacing:"0.06em",
@@ -546,7 +591,6 @@ export default function App() {
           ))}
         </nav>
 
-        {/* ── Sidebar bottom: stats + logout ── */}
         <div style={{padding:"12px 14px 16px", borderTop:`1px solid ${COLORS.border}`}}>
           <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:7, marginBottom:10}}>
             {[
@@ -561,16 +605,13 @@ export default function App() {
               </div>
             ))}
           </div>
-          {/* ── LOGOUT — sidebar ── */}
           <button
             className="btn logout-btn"
             onClick={handleLogout}
             disabled={loggingOut}
             style={{...logoutBtnStyle, width:"100%", justifyContent:"center"}}
           >
-            {loggingOut
-              ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</>
-              : <>↪ SIGN OUT</>}
+            {loggingOut ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</> : <>↪ SIGN OUT</>}
           </button>
         </div>
       </aside>
@@ -626,16 +667,13 @@ export default function App() {
             🎫 Bet Slip
             {slip.length>0 && <span style={{background:COLORS.green, color:COLORS.bg0, borderRadius:999, padding:"0 8px", fontSize:10, fontWeight:800, lineHeight:"18px"}}>{slip.length}</span>}
           </button>
-          {/* ── LOGOUT — desktop topbar ── */}
           <button
             className="btn logout-btn"
             onClick={handleLogout}
             disabled={loggingOut}
             style={logoutBtnStyle}
           >
-            {loggingOut
-              ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</>
-              : <>↪ SIGN OUT</>}
+            {loggingOut ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</> : <>↪ SIGN OUT</>}
           </button>
         </div>
       </header>
@@ -679,7 +717,6 @@ export default function App() {
                 </button>
               ))}
             </nav>
-            {/* ── LOGOUT — mobile drawer ── */}
             <div style={{padding:"12px 12px 16px", borderTop:`1px solid ${COLORS.border}`}}>
               <button
                 className="btn logout-btn"
@@ -687,9 +724,7 @@ export default function App() {
                 disabled={loggingOut}
                 style={{...logoutBtnStyle, width:"100%", justifyContent:"center"}}
               >
-                {loggingOut
-                  ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</>
-                  : <>↪ SIGN OUT</>}
+                {loggingOut ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</> : <>↪ SIGN OUT</>}
               </button>
             </div>
           </div>
@@ -772,73 +807,75 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Mega Picks */}
-              <div style={{marginBottom:18}}>
-                <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
-                  <div style={{display:"flex", alignItems:"center", gap:8}}>
-                    <div style={{width:4, height:22, borderRadius:2, background:COLORS.orange}}/>
-                    <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18, letterSpacing:"0.03em"}}>🔥 MEGA SURE PICKS</span>
-                    <span style={{fontSize:9, color:COLORS.orange, background:COLORS.orangeFaint, border:`1px solid ${COLORS.orangeBorder}`, borderRadius:5, padding:"2px 8px", fontWeight:800}}>TODAY · 3 PICKS</span>
+              {/* Mega Picks — filtered to today's date (or next upcoming date) */}
+              {displayedMega.length > 0 && (
+                <div style={{marginBottom:18}}>
+                  <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
+                    <div style={{display:"flex", alignItems:"center", gap:8}}>
+                      <div style={{width:4, height:22, borderRadius:2, background:COLORS.orange}}/>
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18, letterSpacing:"0.03em"}}>🔥 MEGA SURE PICKS</span>
+                      <span style={{fontSize:9, color:COLORS.orange, background:COLORS.orangeFaint, border:`1px solid ${COLORS.orangeBorder}`, borderRadius:5, padding:"2px 8px", fontWeight:800}}>{megaDateLabel} · {megaCount} PICK{megaCount!==1?"S":""}</span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="mega-grid" style={{display:"grid", gap:10}}>
-                  {MEGA.map((m, i) => {
-                    const inS = inSlip(m.id);
-                    return (
-                      <div key={m.id} className="card-hover glowpulse fadeUp"
-                        style={{background:`linear-gradient(135deg,rgba(255,109,0,0.08) 0%,rgba(30,20,5,0.95) 60%)`,
-                          border:`1px solid ${COLORS.orangeBorder}`, borderRadius:14, overflow:"hidden",
-                          animationDelay:`${i*0.07}s`, animationFillMode:"both"}}>
-                        <div style={{padding:"14px 16px"}}>
-                          <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
-                            <div style={{display:"flex", alignItems:"center", gap:6}}>
-                              <span>{m.flag}</span>
-                              <span style={{fontSize:10, color:COLORS.text1, fontWeight:600}}>{m.league}</span>
-                              <span style={{fontSize:9, background:COLORS.orangeFaint, color:COLORS.orange, borderRadius:4, padding:"1px 6px", fontWeight:800}}>MEGA SURE</span>
-                            </div>
-                            <div style={{display:"flex", alignItems:"center", gap:5}}>
-                              <span style={{fontSize:11, fontFamily:"'Barlow Condensed',sans-serif", color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"2px 8px"}}>{m.odds.toFixed(2)}</span>
-                              <span style={{fontSize:9, color:COLORS.gold, fontWeight:800, background:"rgba(255,215,64,0.08)", border:`1px solid ${COLORS.goldBorder}`, borderRadius:4, padding:"1px 6px"}}>{m.conf}%</span>
-                            </div>
-                          </div>
-                          <div style={{fontWeight:800, fontSize:15, marginBottom:3, lineHeight:1.3}}>{m.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:12}}>vs</span> {m.away}</div>
-                          <div style={{fontSize:10, color:COLORS.text2, marginBottom:10}}>{m.display}</div>
-                          <p style={{fontSize:12, color:COLORS.text1, lineHeight:1.75, marginBottom:10}}>{m.analysis}</p>
-                          <div style={{display:"flex", flexDirection:"column", gap:4, marginBottom:12}}>
-                            {m.tips.map((t, j) => (
-                              <div key={j} style={{display:"flex", gap:6, fontSize:11, color:COLORS.text2}}>
-                                <span style={{color:COLORS.orange, flexShrink:0}}>›</span><span>{t}</span>
+                  <div className="mega-grid" style={{display:"grid", gap:10}}>
+                    {displayedMega.map((m, i) => {
+                      const inS = inSlip(m.id);
+                      return (
+                        <div key={m.id} className="card-hover glowpulse fadeUp"
+                          style={{background:`linear-gradient(135deg,rgba(255,109,0,0.08) 0%,rgba(30,20,5,0.95) 60%)`,
+                            border:`1px solid ${COLORS.orangeBorder}`, borderRadius:14, overflow:"hidden",
+                            animationDelay:`${i*0.07}s`, animationFillMode:"both"}}>
+                          <div style={{padding:"14px 16px"}}>
+                            <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
+                              <div style={{display:"flex", alignItems:"center", gap:6}}>
+                                <span>{m.flag}</span>
+                                <span style={{fontSize:10, color:COLORS.text1, fontWeight:600}}>{m.league}</span>
+                                <span style={{fontSize:9, background:COLORS.orangeFaint, color:COLORS.orange, borderRadius:4, padding:"1px 6px", fontWeight:800}}>MEGA SURE</span>
                               </div>
-                            ))}
-                          </div>
-                          <div style={{display:"flex", alignItems:"center", gap:8}}>
-                            <div style={{flex:1, background:`rgba(255,109,0,0.12)`, border:`1px solid ${COLORS.orangeBorder}`, borderRadius:8, padding:"7px 12px", textAlign:"center"}}>
-                              <div style={{fontSize:11, color:COLORS.orange, fontWeight:800}}>{m.pickLabel}</div>
+                              <div style={{display:"flex", alignItems:"center", gap:5}}>
+                                <span style={{fontSize:11, fontFamily:"'Barlow Condensed',sans-serif", color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"2px 8px"}}>{m.odds.toFixed(2)}</span>
+                                <span style={{fontSize:9, color:COLORS.gold, fontWeight:800, background:"rgba(255,215,64,0.08)", border:`1px solid ${COLORS.goldBorder}`, borderRadius:4, padding:"1px 6px"}}>{m.conf}%</span>
+                              </div>
                             </div>
-                            <button className="btn" onClick={() => addMega(m)}
-                              style={{width:40, height:36, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
-                                background:inS?COLORS.greenFaint:COLORS.bg2, border:`1px solid ${inS?COLORS.greenBorder:COLORS.border}`,
-                                color:inS?COLORS.green:COLORS.text1}}>
-                              {inS ? "✓" : "+"}
-                            </button>
+                            <div style={{fontWeight:800, fontSize:15, marginBottom:3, lineHeight:1.3}}>{m.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:12}}>vs</span> {m.away}</div>
+                            <div style={{fontSize:10, color:COLORS.text2, marginBottom:10}}>{m.display}</div>
+                            <p style={{fontSize:12, color:COLORS.text1, lineHeight:1.75, marginBottom:10}}>{m.analysis}</p>
+                            <div style={{display:"flex", flexDirection:"column", gap:4, marginBottom:12}}>
+                              {m.tips.map((t, j) => (
+                                <div key={j} style={{display:"flex", gap:6, fontSize:11, color:COLORS.text2}}>
+                                  <span style={{color:COLORS.orange, flexShrink:0}}>›</span><span>{t}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div style={{display:"flex", alignItems:"center", gap:8}}>
+                              <div style={{flex:1, background:`rgba(255,109,0,0.12)`, border:`1px solid ${COLORS.orangeBorder}`, borderRadius:8, padding:"7px 12px", textAlign:"center"}}>
+                                <div style={{fontSize:11, color:COLORS.orange, fontWeight:800}}>{m.pickLabel}</div>
+                              </div>
+                              <button className="btn" onClick={() => addMega(m)}
+                                style={{width:40, height:36, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
+                                  background:inS?COLORS.greenFaint:COLORS.bg2, border:`1px solid ${inS?COLORS.greenBorder:COLORS.border}`,
+                                  color:inS?COLORS.green:COLORS.text1}}>
+                                {inS ? "✓" : "+"}
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
 
-                <button className="btn" onClick={() => { MEGA.forEach(m => { if (!inSlip(m.id)) addMega(m); }); }}
-                  style={{width:"100%", marginTop:10, padding:"13px", borderRadius:12,
-                    background:`linear-gradient(90deg,${COLORS.orange},#ff8f00)`,
-                    color:"#fff", fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:15, letterSpacing:"0.06em"}}>
-                  🔥 ADD ALL 3 MEGA PICKS TO SLIP
-                </button>
-              </div>
+                  <button className="btn" onClick={() => { displayedMega.forEach(m => { if (!inSlip(m.id)) addMega(m); }); }}
+                    style={{width:"100%", marginTop:10, padding:"13px", borderRadius:12,
+                      background:`linear-gradient(90deg,${COLORS.orange},#ff8f00)`,
+                      color:"#fff", fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:15, letterSpacing:"0.06em"}}>
+                    🔥 ADD ALL {megaCount} MEGA PICK{megaCount!==1?"S":""} TO SLIP
+                  </button>
+                </div>
+              )}
 
               {/* UCL preview */}
-              <div>
+              <div style={{marginBottom:18}}>
                 <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
                   <div style={{display:"flex", alignItems:"center", gap:8}}>
                     <div style={{width:4, height:22, borderRadius:2, background:COLORS.blue}}/>
@@ -852,55 +889,229 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {/* Recent Results on Home */}
+              <div>
+                <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
+                  <div style={{display:"flex", alignItems:"center", gap:8}}>
+                    <div style={{width:4, height:22, borderRadius:2, background:COLORS.green}}/>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:16}}>📊 RECENT RESULTS</span>
+                    <span style={{fontSize:9, color:COLORS.green, background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:5, padding:"2px 8px", fontWeight:800}}>
+                      {GAMES.filter(g=>g.st==="result" && didWin(g,g.pick)).length}/{GAMES.filter(g=>g.st==="result").length} CORRECT
+                    </span>
+                  </div>
+                  <button className="btn" onClick={() => setPage("results")} style={{fontSize:11, color:COLORS.green, fontWeight:700}}>View all →</button>
+                </div>
+                <div style={{display:"flex", flexDirection:"column", gap:8}}>
+                  {GAMES.filter(g => g.st==="result").slice(-5).reverse().map((g, i) => {
+                    const hW = g.score.h > g.score.a;
+                    const aW = g.score.a > g.score.h;
+                    const dr = g.score.h === g.score.a;
+                    const correct = didWin(g, g.pick);
+                    return (
+                      <div key={g.id} className="card-hover fadeUp" style={{
+                        background:COLORS.bg2,
+                        border:`1px solid ${correct ? COLORS.greenBorder : "rgba(255,82,82,0.18)"}`,
+                        borderRadius:12, padding:"12px 14px",
+                        animationDelay:`${i*0.05}s`, animationFillMode:"both"
+                      }}>
+                        {/* Top row: league + date + result badge */}
+                        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8}}>
+                          <div style={{display:"flex", alignItems:"center", gap:5}}>
+                            <span style={{fontSize:12}}>{g.flag}</span>
+                            <span style={{fontSize:10, color:COLORS.text2, fontWeight:600}}>{g.league}</span>
+                            <span style={{fontSize:9, color:COLORS.text2}}>· {g.round}</span>
+                          </div>
+                          <div style={{display:"flex", alignItems:"center", gap:6}}>
+                            <span style={{fontSize:10, color:COLORS.text2, fontFamily:"monospace"}}>{g.display}</span>
+                            <span style={{
+                              fontSize:10, fontWeight:800, letterSpacing:"0.04em",
+                              color: correct ? COLORS.green : COLORS.red,
+                              background: correct ? COLORS.greenFaint : COLORS.redFaint,
+                              border:`1px solid ${correct ? COLORS.greenBorder : "rgba(255,82,82,0.25)"}`,
+                              borderRadius:5, padding:"2px 8px"
+                            }}>{correct ? "✓ WIN" : "✗ LOSS"}</span>
+                          </div>
+                        </div>
+                        {/* Score row */}
+                        <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:8, alignItems:"center"}}>
+                          <div style={{textAlign:"right"}}>
+                            <div style={{fontWeight:hW?800:500, fontSize:14, color:hW?COLORS.text0:COLORS.text2, lineHeight:1.2}}>{g.home}</div>
+                          </div>
+                          <div style={{
+                            textAlign:"center", minWidth:60,
+                            background: dr ? COLORS.goldFaint : correct ? COLORS.greenFaint : COLORS.redFaint,
+                            border:`1px solid ${dr ? COLORS.goldBorder : correct ? COLORS.greenBorder : "rgba(255,82,82,0.25)"}`,
+                            borderRadius:9, padding:"6px 12px"
+                          }}>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:22, color:dr?COLORS.gold:COLORS.text0, letterSpacing:"0.02em", lineHeight:1}}>{g.score.h}–{g.score.a}</div>
+                            <div style={{fontSize:8, color:COLORS.text2, fontWeight:700, letterSpacing:"0.1em", marginTop:2}}>FT</div>
+                          </div>
+                          <div>
+                            <div style={{fontWeight:aW?800:500, fontSize:14, color:aW?COLORS.text0:COLORS.text2, lineHeight:1.2}}>{g.away}</div>
+                          </div>
+                        </div>
+                        {/* AI pick row */}
+                        <div style={{marginTop:8, display:"flex", alignItems:"center", justifyContent:"space-between"}}>
+                          <span style={{fontSize:10, color:COLORS.text2}}>
+                            AI picked: <span style={{color:pickColor(g.pick), fontWeight:700}}>{pickName(g.pick)}</span>
+                            <span style={{color:COLORS.text2}}> @ {oddsFor(g, g.pick).toFixed(2)}</span>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </>
           )}
 
-          {/* ─── MATCHES PAGE ──────────────────────────── */}
+          {/* ─── MATCHES PAGE — grouped by date ───────── */}
           {page === "matches" && (
             <>
               <div style={{fontSize:11, color:COLORS.text2, marginBottom:12, fontWeight:500}}>
                 Showing {upGames.length} upcoming {cat!=="All"?(LEAGUES_LABEL[cat]||cat):"all-league"} matches
               </div>
-              <div className="cards-grid" style={{display:"grid", gap:12}}>
-                {upGames.map((g, i) => (
-                  <MatchCard key={g.id} game={g} inSlip={inSlip(g.id)}
-                    expanded={expanded===g.id}
-                    onExpand={() => setExpanded(expanded===g.id ? null : g.id)}
-                    onAdd={pick => addToSlip(g, pick)}
-                    delay={i*0.04} />
-                ))}
-                {upGames.length === 0 && <EmptyState msg="No upcoming matches for this filter."/>}
-              </div>
+              {upGrouped.length === 0 && <EmptyState msg="No upcoming matches for this filter."/>}
+              {upGrouped.map(({ dateKey, label, games }) => (
+                <div key={dateKey} style={{marginBottom:24}}>
+                  {/* Date header */}
+                  <div style={{
+                    display:"flex", alignItems:"center", gap:10, marginBottom:12
+                  }}>
+                    <div style={{
+                      fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:13,
+                      letterSpacing:"0.1em", color: dateKey === todayKey ? COLORS.green : COLORS.text1,
+                      background: dateKey === todayKey ? COLORS.greenFaint : COLORS.bg2,
+                      border:`1px solid ${dateKey === todayKey ? COLORS.greenBorder : COLORS.border}`,
+                      borderRadius:6, padding:"4px 12px",
+                    }}>
+                      {label}
+                    </div>
+                    <div style={{flex:1, height:1, background:COLORS.border}}/>
+                    <div style={{fontSize:10, color:COLORS.text2, fontWeight:600}}>{games.length} match{games.length!==1?"es":""}</div>
+                  </div>
+                  <div className="cards-grid" style={{display:"grid", gap:12}}>
+                    {games.map((g, i) => (
+                      <MatchCard key={g.id} game={g} inSlip={inSlip(g.id)}
+                        expanded={expanded===g.id}
+                        onExpand={() => setExpanded(expanded===g.id ? null : g.id)}
+                        onAdd={pick => addToSlip(g, pick)}
+                        delay={i*0.04} />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </>
           )}
 
-          {/* ─── RESULTS PAGE ──────────────────────────── */}
+          {/* ─── RESULTS PAGE — grouped by date ──────── */}
           {page === "results" && (
             <>
-              <div style={{fontSize:11, color:COLORS.text2, marginBottom:12}}>{resGames.length} results</div>
-              <div className="cards-grid" style={{display:"grid", gap:10}}>
-                {resGames.map((g, i) => <ResultCard key={g.id} game={g} delay={i*0.04}/>)}
-                {resGames.length === 0 && <EmptyState msg="No results for this filter."/>}
-              </div>
+              {(() => {
+                const all = GAMES.filter(g => g.st==="result" && (cat==="All" || g.cat===cat));
+                const wins = all.filter(g => didWin(g, g.pick)).length;
+                const losses = all.length - wins;
+                const rate = all.length ? Math.round(wins/all.length*100) : 0;
+                return (
+                  <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:14}}>
+                    {[
+                      {label:"CORRECT", val:wins, col:COLORS.green, bg:COLORS.greenFaint, bc:COLORS.greenBorder},
+                      {label:"WRONG",   val:losses, col:COLORS.red, bg:COLORS.redFaint, bc:"rgba(255,82,82,0.22)"},
+                      {label:"WIN RATE", val:`${rate}%`, col:COLORS.gold, bg:COLORS.goldFaint, bc:COLORS.goldBorder},
+                    ].map(s => (
+                      <div key={s.label} style={{background:s.bg, border:`1px solid ${s.bc}`, borderRadius:11, padding:"11px 14px", textAlign:"center"}}>
+                        <div style={{fontSize:9, color:s.col, letterSpacing:"0.1em", fontWeight:700, marginBottom:4}}>{s.label}</div>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:24, color:s.col}}>{s.val}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+              <div style={{fontSize:11, color:COLORS.text2, marginBottom:12}}>{resGames.length} result{resGames.length!==1?"s":""}</div>
+              {resGrouped.length === 0 && <EmptyState msg="No results for this filter."/>}
+              {resGrouped.slice().reverse().map(({ dateKey, label, games }) => (
+                <div key={dateKey} style={{marginBottom:20}}>
+                  <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:10}}>
+                    <div style={{
+                      fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:13,
+                      letterSpacing:"0.1em", color:COLORS.text1,
+                      background:COLORS.bg2, border:`1px solid ${COLORS.border}`,
+                      borderRadius:6, padding:"4px 12px",
+                    }}>
+                      {label}
+                    </div>
+                    <div style={{flex:1, height:1, background:COLORS.border}}/>
+                    <div style={{fontSize:10, color:COLORS.text2, fontWeight:600}}>{games.length} result{games.length!==1?"s":""}</div>
+                  </div>
+                  <div className="cards-grid" style={{display:"grid", gap:10}}>
+                    {games.map((g, i) => <ResultCard key={g.id} game={g} delay={i*0.04}/>)}
+                  </div>
+                </div>
+              ))}
             </>
           )}
 
           {/* ─── MY BETS PAGE ──────────────────────────── */}
           {page === "mybets" && (
             <>
-              <div style={{display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10, marginBottom:16}}>
+              {/* P&L Banner */}
+              {(() => {
+                const pnl = +(totalReturns - totalWagered).toFixed(2);
+                const isPos = pnl >= 0;
+                const roi = totalWagered > 0 ? ((pnl / totalWagered) * 100).toFixed(1) : "0.0";
+                return (
+                  <div style={{
+                    background: isPos
+                      ? "linear-gradient(135deg,rgba(0,230,118,0.10),rgba(0,200,83,0.04))"
+                      : "linear-gradient(135deg,rgba(255,82,82,0.10),rgba(200,0,0,0.04))",
+                    border:`1px solid ${isPos ? COLORS.greenBorder : "rgba(255,82,82,0.28)"}`,
+                    borderRadius:16, padding:"18px 20px", marginBottom:14
+                  }}>
+                    <div style={{fontSize:9, color:isPos?COLORS.green:COLORS.red, letterSpacing:"0.14em", fontWeight:800, marginBottom:6}}>NET PROFIT / LOSS</div>
+                    <div style={{display:"flex", alignItems:"flex-end", gap:10, marginBottom:14}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:38, color:isPos?COLORS.green:COLORS.red, lineHeight:1, letterSpacing:"-0.01em"}}>
+                        {isPos ? "+" : ""}€{Math.abs(pnl).toFixed(2)}
+                      </div>
+                      <div style={{fontSize:12, color:isPos?COLORS.green:COLORS.red, fontWeight:700, paddingBottom:4, opacity:0.75}}>
+                        ROI {isPos?"+":""}{roi}%
+                      </div>
+                    </div>
+                    <div style={{display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8}}>
+                      {[
+                        {label:"BETS",    val:history.length,             col:COLORS.text1},
+                        {label:"WON",     val:wonCount,                   col:COLORS.green},
+                        {label:"LOST",    val:settledCount-wonCount,      col:COLORS.red},
+                        {label:"WIN RATE",val:winRate!==null?`${winRate}%`:"—", col:COLORS.gold},
+                      ].map(s => (
+                        <div key={s.label} style={{background:"rgba(0,0,0,0.25)", borderRadius:9, padding:"8px 10px", textAlign:"center"}}>
+                          <div style={{fontSize:8, color:COLORS.text2, letterSpacing:"0.1em", fontWeight:700, marginBottom:3}}>{s.label}</div>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18, color:s.col}}>{s.val}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+              <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:18}}>
                 {[
-                  {label:"Win Rate",   val:winRate!==null?`${winRate}%`:"—",  col:COLORS.green},
-                  {label:"Total Bets", val:history.length,                     col:COLORS.blue},
-                  {label:"Wagered",    val:`€${totalWagered.toFixed(2)}`,      col:COLORS.text0},
-                  {label:"Returns",    val:`€${totalReturns.toFixed(2)}`,      col:totalReturns>=totalWagered?COLORS.green:COLORS.red},
+                  {label:"TOTAL WAGERED", val:`€${totalWagered.toFixed(2)}`, col:COLORS.text0, sub:"All-time staked"},
+                  {label:"TOTAL RETURNS", val:`€${totalReturns.toFixed(2)}`,  col:totalReturns>=totalWagered?COLORS.green:COLORS.red, sub:"Winnings received"},
                 ].map(s => (
-                  <div key={s.label} style={{background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:13, padding:"14px 16px"}}>
-                    <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.08em", marginBottom:6, fontWeight:700}}>{s.label.toUpperCase()}</div>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:22, color:s.col}}>{s.val}</div>
+                  <div key={s.label} style={{background:COLORS.bg1, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:"13px 15px"}}>
+                    <div style={{fontSize:8, color:COLORS.text2, letterSpacing:"0.12em", fontWeight:700, marginBottom:5}}>{s.label}</div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:22, color:s.col, lineHeight:1}}>{s.val}</div>
+                    <div style={{fontSize:10, color:COLORS.text2, marginTop:4}}>{s.sub}</div>
                   </div>
                 ))}
               </div>
+              {settled.length > 0 && (
+                <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:12}}>
+                  <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.14em", fontWeight:700}}>BET HISTORY</div>
+                  <div style={{flex:1, height:1, background:COLORS.border}}/>
+                  <div style={{fontSize:9, color:COLORS.text2}}>{settled.length} ticket{settled.length!==1?"s":""}</div>
+                </div>
+              )}
               {settled.length === 0
                 ? <EmptyState msg="No bets yet. Browse matches and build your slip!"/>
                 : settled.map(e => <HistoryCard key={e.id} entry={e} open={histExp===e.id} onToggle={() => setHistExp(histExp===e.id ? null : e.id)}/>)
@@ -1226,44 +1437,163 @@ function ResultCard({game, delay=0}) {
 
 /* ── HISTORY CARD ────────────────────────────────────────────── */
 function HistoryCard({entry, open, onToggle}) {
-  const sc = entry.status==="won"?COLORS.green : entry.status==="lost"?COLORS.red : COLORS.gold;
+  const sc = entry.status==="won" ? COLORS.green : entry.status==="lost" ? COLORS.red : COLORS.gold;
+  const bcol = entry.status==="won" ? COLORS.greenBorder : entry.status==="lost" ? "rgba(255,82,82,0.22)" : COLORS.border;
+  const pnl = entry.status==="won" ? +(entry.potReturn - entry.totalStake).toFixed(2) : entry.status==="lost" ? -entry.totalStake : null;
+  const ref = `#${String(entry.id).slice(-6).toUpperCase()}`;
+  const placedAt = new Date(entry.placedAt);
+  const dateStr = placedAt.toLocaleDateString("en-GB", {day:"numeric", month:"short", year:"numeric"});
+  const timeStr = placedAt.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
+  const isAcca = entry.bets.length > 1;
+
   return (
-    <div className="fadeUp" style={{background:COLORS.bg1, border:`1px solid ${entry.status==="won"?COLORS.greenBorder:entry.status==="lost"?"rgba(255,82,82,0.2)":COLORS.border}`, borderRadius:13, overflow:"hidden", marginBottom:8}}>
-      <div onClick={onToggle} style={{padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, cursor:"pointer"}}>
-        <div style={{flex:1, minWidth:0}}>
-          <div style={{fontSize:10, color:COLORS.text2, marginBottom:3}}>{new Date(entry.placedAt).toLocaleString("en-GB", {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"})}</div>
-          <div style={{fontSize:13, fontWeight:700}}>
-            {entry.bets.length} selection{entry.bets.length>1?"s":""}
-            {entry.bets.length>1 && <span style={{fontSize:11, color:COLORS.text2, fontWeight:400}}> · {entry.accumOdds}×</span>}
+    <div className="fadeUp" style={{
+      background:COLORS.bg1, border:`1px solid ${bcol}`,
+      borderRadius:15, overflow:"hidden", marginBottom:10,
+      boxShadow: entry.status==="won" ? "0 0 0 1px rgba(0,230,118,0.06)" : "none"
+    }}>
+      {/* ── Header bar ── */}
+      <div onClick={onToggle} style={{padding:"14px 16px", cursor:"pointer"}}>
+        <div style={{display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10}}>
+          {/* Left: ref + meta */}
+          <div style={{flex:1, minWidth:0}}>
+            <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:5}}>
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:13, color:COLORS.text2, letterSpacing:"0.08em"}}>{ref}</span>
+              {isAcca && (
+                <span style={{fontSize:9, fontWeight:800, letterSpacing:"0.07em",
+                  color:COLORS.blue, background:COLORS.blueFaint,
+                  border:"1px solid rgba(68,138,255,0.28)", borderRadius:4, padding:"1px 7px"}}>ACCA</span>
+              )}
+              <span style={{fontSize:9, color:COLORS.text2}}>{dateStr} · {timeStr}</span>
+            </div>
+            <div style={{fontWeight:800, fontSize:14, color:COLORS.text0, lineHeight:1.3}}>
+              {entry.bets.length === 1
+                ? <>{entry.bets[0].home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:12}}>vs</span> {entry.bets[0].away}</>
+                : <>{entry.bets.length}-Fold Accumulator</>
+              }
+            </div>
+            {entry.bets.length === 1 && (
+              <div style={{fontSize:11, color:pickColor(entry.bets[0].pick), fontWeight:700, marginTop:3}}>
+                {pickName(entry.bets[0].pick)}
+              </div>
+            )}
+          </div>
+          {/* Right: status pill */}
+          <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6, flexShrink:0}}>
+            <div style={{
+              padding:"4px 12px", borderRadius:20, fontSize:10, fontWeight:900,
+              letterSpacing:"0.08em", background:`${sc}18`, color:sc, border:`1px solid ${sc}40`
+            }}>
+              {entry.status === "pending" ? "⏳ PENDING" : entry.status === "won" ? "✓ WON" : "✗ LOST"}
+            </div>
           </div>
         </div>
-        <div style={{textAlign:"right", flexShrink:0}}>
-          <div style={{fontSize:11, color:COLORS.text2}}>€{entry.totalStake.toFixed(2)} → <span style={{color:sc, fontWeight:700}}>€{entry.potReturn.toFixed(2)}</span></div>
+
+        {/* ── Financial summary row ── */}
+        <div style={{
+          display:"grid", gridTemplateColumns: isAcca ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr",
+          gap:0, marginTop:12, background:COLORS.bg0, borderRadius:10,
+          border:`1px solid ${COLORS.border}`, overflow:"hidden"
+        }}>
+          {[
+            {label:"STAKE", val:`€${entry.totalStake.toFixed(2)}`, col:COLORS.text1},
+            ...(isAcca ? [{label:"ODDS", val:`${entry.accumOdds}×`, col:COLORS.gold}] : []),
+            {label:"POTENTIAL", val:`€${entry.potReturn.toFixed(2)}`, col:COLORS.text0},
+            {label:"P&L", val: pnl !== null ? `${pnl >= 0 ? "+" : ""}€${Math.abs(pnl).toFixed(2)}` : "—",
+             col: pnl === null ? COLORS.gold : pnl >= 0 ? COLORS.green : COLORS.red},
+          ].map((f, fi, arr) => (
+            <div key={f.label} style={{
+              padding:"10px 12px", textAlign:"center",
+              borderRight: fi < arr.length-1 ? `1px solid ${COLORS.border}` : "none"
+            }}>
+              <div style={{fontSize:8, color:COLORS.text2, letterSpacing:"0.1em", fontWeight:700, marginBottom:4}}>{f.label}</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:15, color:f.col}}>{f.val}</div>
+            </div>
+          ))}
         </div>
-        <div style={{padding:"3px 10px", borderRadius:20, fontSize:10, fontWeight:800, letterSpacing:"0.06em", background:`${sc}14`, color:sc, border:`1px solid ${sc}30`, flexShrink:0}}>{entry.status.toUpperCase()}</div>
-        <span style={{fontSize:10, color:COLORS.text2, flexShrink:0}}>{open?"▲":"▼"}</span>
+
+        <div style={{display:"flex", justifyContent:"flex-end", marginTop:8}}>
+          <span style={{fontSize:10, color:COLORS.text2, fontWeight:600}}>
+            {open ? "▲ Hide selections" : `▼ ${entry.bets.length} selection${entry.bets.length!==1?"s":""}`}
+          </span>
+        </div>
       </div>
+
+      {/* ── Expanded selections ── */}
       {open && (
-        <div style={{borderTop:`1px solid ${COLORS.border}`, padding:"10px 16px", background:COLORS.bg0}}>
+        <div style={{borderTop:`1px solid ${COLORS.border}`, background:COLORS.bg0}}>
           {entry.bets.map((b, i) => {
-            const rc = b.result==="won"?COLORS.green : b.result==="lost"?COLORS.red : COLORS.gold;
+            const rc = b.result==="won" ? COLORS.green : b.result==="lost" ? COLORS.red : COLORS.gold;
+            const isLast = i === entry.bets.length - 1;
             return (
-              <div key={i} style={{display:"flex", alignItems:"center", gap:8, paddingBottom:8, marginBottom:i<entry.bets.length-1?8:0, borderBottom:i<entry.bets.length-1?`1px solid ${COLORS.border}`:"none"}}>
-                <div style={{flex:1, minWidth:0}}>
-                  <div style={{fontSize:10, color:COLORS.text2}}>{b.flag} {b.league}</div>
-                  <div style={{fontSize:12, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{b.home} vs {b.away}</div>
-                  <div style={{fontSize:11, color:pickColor(b.pick), fontWeight:700, marginTop:2}}>{pickName(b.pick)}</div>
+              <div key={i} style={{
+                display:"grid", gridTemplateColumns:"24px 1fr auto",
+                gap:12, padding:"12px 16px",
+                borderBottom: isLast ? "none" : `1px solid ${COLORS.border}`,
+                alignItems:"center"
+              }}>
+                {/* Status dot / icon */}
+                <div style={{
+                  width:24, height:24, borderRadius:"50%", flexShrink:0,
+                  background: b.result==="pending" ? "rgba(255,215,64,0.12)" : b.result==="won" ? COLORS.greenFaint : COLORS.redFaint,
+                  border:`1px solid ${b.result==="pending" ? COLORS.goldBorder : b.result==="won" ? COLORS.greenBorder : "rgba(255,82,82,0.3)"}`,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:11, color:rc, fontWeight:900
+                }}>
+                  {b.result==="pending" ? <span style={{fontSize:10, animation:"pulse 1.8s ease infinite", display:"inline-block"}}>·</span>
+                   : b.result==="won" ? "✓" : "✗"}
                 </div>
-                <div style={{textAlign:"right", flexShrink:0}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:12, color:COLORS.gold, fontWeight:800}}>{b.odds.toFixed(2)}×</div>
-                  {b.score && <div style={{fontSize:10, color:COLORS.text2}}>{b.score.h}–{b.score.a}</div>}
+
+                {/* Match info */}
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:10, color:COLORS.text2, marginBottom:2, display:"flex", alignItems:"center", gap:5}}>
+                    <span>{b.flag}</span><span>{b.league}</span>
+                  </div>
+                  <div style={{fontSize:13, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3}}>
+                    {b.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:11}}>vs</span> {b.away}
+                  </div>
+                  <div style={{display:"flex", alignItems:"center", gap:6, marginTop:3}}>
+                    <span style={{fontSize:11, color:pickColor(b.pick), fontWeight:700}}>{pickName(b.pick)}</span>
+                    {b.score && (
+                      <span style={{fontSize:10, color:COLORS.text2, fontFamily:"monospace", background:COLORS.bg2,
+                        border:`1px solid ${COLORS.border}`, borderRadius:4, padding:"1px 7px"}}>
+                        {b.score.h}–{b.score.a} FT
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div style={{width:22, textAlign:"center", flexShrink:0, fontSize:b.result==="pending"?13:16, color:rc}}>
-                  {b.result==="pending" ? <span style={{animation:"pulse 1.8s ease infinite", display:"inline-block"}}>⏳</span> : b.result==="won" ? "✓" : "✗"}
+
+                {/* Odds */}
+                <div style={{
+                  fontFamily:"'Barlow Condensed',sans-serif", fontSize:15, fontWeight:900,
+                  color:COLORS.gold, background:COLORS.goldFaint,
+                  border:`1px solid ${COLORS.goldBorder}`, borderRadius:7,
+                  padding:"4px 10px", flexShrink:0, textAlign:"center"
+                }}>
+                  {b.odds.toFixed(2)}×
                 </div>
               </div>
             );
           })}
+
+          {/* Accumulator chain summary */}
+          {isAcca && (
+            <div style={{
+              margin:"0 16px 14px", padding:"10px 14px",
+              background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:10,
+              display:"flex", justifyContent:"space-between", alignItems:"center"
+            }}>
+              <span style={{fontSize:11, color:COLORS.text2}}>
+                Combined odds: <span style={{color:COLORS.gold, fontWeight:800, fontFamily:"'Barlow Condensed',sans-serif", fontSize:14}}>{entry.accumOdds}×</span>
+              </span>
+              <span style={{fontSize:11, color:COLORS.text2}}>
+                Stake: <span style={{color:COLORS.text0, fontWeight:700}}>€{entry.totalStake.toFixed(2)}</span>
+              </span>
+              <span style={{fontSize:11}}>
+                Return: <span style={{color:sc, fontWeight:800, fontFamily:"'Barlow Condensed',sans-serif", fontSize:14}}>€{entry.potReturn.toFixed(2)}</span>
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
