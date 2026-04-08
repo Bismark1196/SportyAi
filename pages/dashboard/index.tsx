@@ -257,23 +257,28 @@ const GAMES = [
 
 /* ── HELPERS ──────────────────────────────────────────────── */
 const LS = "betai_v5";
-const persist = { load: () => { try { const r=localStorage.getItem(LS); return r?JSON.parse(r):null; } catch{return null;} },
-  save: d => { try { localStorage.setItem(LS, JSON.stringify(d)); } catch{} } };
+const persist = {
+  load: () => { try { const r=localStorage.getItem(LS); return r?JSON.parse(r):null; } catch{return null;} },
+  save: d => { try { localStorage.setItem(LS, JSON.stringify(d)); } catch{} }
+};
 
 const oddsFor = (g, p) => p==="home_win"?g.odds.h : p==="draw"?g.odds.d : g.odds.a;
 const pickName = p => ({home_win:"Home Win",draw:"Draw",away_win:"Away Win"}[p]||p);
 const pickColor = p => ({home_win:COLORS.blue, draw:COLORS.gold, away_win:COLORS.purple}[p]||COLORS.green);
 
-const confMeta = c => c>=88?{label:"ELITE",c:COLORS.gold,bg:"rgba(255,215,64,0.12)",bc:"rgba(255,215,64,0.3)"}
-  : c>=75?{label:"HIGH",c:COLORS.green,bg:COLORS.greenFaint,bc:COLORS.greenBorder}
-  : c>=60?{label:"MED",c:COLORS.blue,bg:COLORS.blueFaint,bc:"rgba(68,138,255,0.3)"}
-  : {label:"LOW",c:COLORS.red,bg:COLORS.redFaint,bc:"rgba(255,82,82,0.25)"};
+const confMeta = c => c>=88
+  ? {label:"ELITE",c:COLORS.gold,bg:"rgba(255,215,64,0.12)",bc:"rgba(255,215,64,0.3)"}
+  : c>=75
+    ? {label:"HIGH",c:COLORS.green,bg:COLORS.greenFaint,bc:COLORS.greenBorder}
+    : c>=60
+      ? {label:"MED",c:COLORS.blue,bg:COLORS.blueFaint,bc:"rgba(68,138,255,0.3)"}
+      : {label:"LOW",c:COLORS.red,bg:COLORS.redFaint,bc:"rgba(255,82,82,0.25)"};
 
-const didWin = (g,p) => {
-  if(!g?.score) return null;
-  if(p==="home_win") return g.score.h>g.score.a;
-  if(p==="draw") return g.score.h===g.score.a;
-  if(p==="away_win") return g.score.a>g.score.h;
+const didWin = (g, p) => {
+  if (!g?.score) return null;
+  if (p==="home_win") return g.score.h > g.score.a;
+  if (p==="draw")     return g.score.h === g.score.a;
+  if (p==="away_win") return g.score.a > g.score.h;
   return null;
 };
 
@@ -283,96 +288,101 @@ const LEAGUES_LABEL = { UCL:"Champions League", EPL:"Premier League", "La Liga":
 /* ── APP ──────────────────────────────────────────────────── */
 export default function App() {
   const s0 = persist.load();
-  const [balance, setBalance]   = useState(s0?.balance ?? 500);
-  const [slip, setSlip]         = useState(s0?.slip ?? []);
-  const [history, setHistory]   = useState(s0?.history ?? []);
-  const [page, setPage]         = useState("home");
-  const [cat, setCat]           = useState("All");
-  const [slipOpen, setSlipOpen] = useState(false);
+  const [balance, setBalance]     = useState(s0?.balance ?? 500);
+  const [slip, setSlip]           = useState(s0?.slip ?? []);
+  const [history, setHistory]     = useState(s0?.history ?? []);
+  const [page, setPage]           = useState("home");
+  const [cat, setCat]             = useState("All");
+  const [slipOpen, setSlipOpen]   = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [placing, setPlacing]   = useState(false);
-  const [expanded, setExpanded] = useState(null);
-  const [toast, setToast]       = useState(null);
-  const [depOpen, setDepOpen]   = useState(false);
-  const [depVal, setDepVal]     = useState("50");
-  const [histExp, setHistExp]   = useState(null);
+  const [placing, setPlacing]     = useState(false);
+  const [expanded, setExpanded]   = useState(null);
+  const [toast, setToast]         = useState(null);
+  const [depOpen, setDepOpen]     = useState(false);
+  const [depVal, setDepVal]       = useState("50");
+  const [histExp, setHistExp]     = useState(null);
 
   useEffect(() => { persist.save({balance, slip, history}); }, [balance, slip, history]);
 
   const toast$ = (msg, type="ok") => {
-    setToast({msg,type});
-    setTimeout(()=>setToast(null), 2800);
+    setToast({msg, type});
+    setTimeout(() => setToast(null), 2800);
   };
 
   // slip math
-  const totalStake = slip.reduce((a,b) => a+(parseFloat(b.stake)||0), 0);
-  const accumOdds  = slip.reduce((a,b) => a*b.odds, 1);
+  const totalStake = slip.reduce((a, b) => a + (parseFloat(b.stake) || 0), 0);
+  const accumOdds  = slip.reduce((a, b) => a * b.odds, 1);
   const potReturn  = totalStake * accumOdds;
-  const inSlip     = id => slip.some(b=>b.id===id);
+  const inSlip     = id => slip.some(b => b.id === id);
 
   function addToSlip(game, pick) {
-    if (inSlip(game.id)) { setSlip(p=>p.filter(b=>b.id!==game.id)); return; }
+    if (inSlip(game.id)) { setSlip(p => p.filter(b => b.id !== game.id)); return; }
     const odds = oddsFor(game, pick);
-    setSlip(p=>[...p, {id:game.id,home:game.home,away:game.away,league:game.league,flag:game.flag,pick,odds,stake:"10"}]);
+    setSlip(p => [...p, {id:game.id, home:game.home, away:game.away, league:game.league, flag:game.flag, pick, odds, stake:"10"}]);
     setSlipOpen(true);
     toast$(`${game.home} vs ${game.away} added`);
   }
+
   function addMega(m) {
-    if(inSlip(m.id)) { setSlip(p=>p.filter(b=>b.id!==m.id)); return; }
-    setSlip(p=>[...p, {id:m.id,home:m.home,away:m.away,league:m.league,flag:m.flag,pick:m.pick,odds:m.odds,stake:"10"}]);
+    if (inSlip(m.id)) { setSlip(p => p.filter(b => b.id !== m.id)); return; }
+    setSlip(p => [...p, {id:m.id, home:m.home, away:m.away, league:m.league, flag:m.flag, pick:m.pick, odds:m.odds, stake:"10"}]);
     setSlipOpen(true);
     toast$("🔥 Mega Pick added!", "mega");
   }
-  const updateStake = (id,v) => setSlip(p=>p.map(b=>b.id===id?{...b,stake:v}:b));
-  const removeSlip  = id => setSlip(p=>p.filter(b=>b.id!==id));
+
+  const updateStake = (id, v) => setSlip(p => p.map(b => b.id===id ? {...b, stake:v} : b));
+  const removeSlip  = id => setSlip(p => p.filter(b => b.id !== id));
 
   async function placeBets() {
-    if (totalStake>balance||totalStake<=0) { toast$("Insufficient balance","err"); return; }
+    if (totalStake > balance || totalStake <= 0) { toast$("Insufficient balance", "err"); return; }
     setPlacing(true);
-    await new Promise(r=>setTimeout(r,1300));
+    await new Promise(r => setTimeout(r, 1300));
     const entry = {
-      id:Date.now(), placedAt:new Date().toISOString(),
-      bets:[...slip], totalStake, accumOdds:+accumOdds.toFixed(2), potReturn:+potReturn.toFixed(2), status:"pending"
+      id: Date.now(), placedAt: new Date().toISOString(),
+      bets: [...slip], totalStake, accumOdds: +accumOdds.toFixed(2), potReturn: +potReturn.toFixed(2), status: "pending"
     };
-    setHistory(p=>[entry,...p]);
-    setBalance(p=>+(p-totalStake).toFixed(2));
+    setHistory(p => [entry, ...p]);
+    setBalance(p => +(p - totalStake).toFixed(2));
     setSlip([]); setSlipOpen(false); setPlacing(false);
-    toast$("✅ Bets placed! Good luck!","ok");
+    toast$("✅ Bets placed! Good luck!", "ok");
   }
 
   function deposit() {
     const n = parseFloat(depVal);
-    if(n>0&&!isNaN(n)) { setBalance(p=>+(p+n).toFixed(2)); setDepOpen(false); setDepVal("50"); toast$(`€${n.toFixed(2)} deposited`); }
+    if (n > 0 && !isNaN(n)) {
+      setBalance(p => +(p + n).toFixed(2));
+      setDepOpen(false);
+      setDepVal("50");
+      toast$(`€${n.toFixed(2)} deposited`);
+    }
   }
 
   // settled history
-  const settled = history.map(e=>{
-    const bets = e.bets.map(b=>{
-      const g = GAMES.find(x=>x.id===b.id);
-      if(!g?.score) return {...b,result:"pending"};
-      return {...b,result:didWin(g,b.pick)?"won":"lost",score:g.score};
+  const settled = history.map(e => {
+    const bets = e.bets.map(b => {
+      const g = GAMES.find(x => x.id === b.id);
+      if (!g?.score) return {...b, result:"pending"};
+      return {...b, result: didWin(g, b.pick) ? "won" : "lost", score: g.score};
     });
-    const done = bets.every(b=>b.result!=="pending");
-    const allW = bets.every(b=>b.result==="won");
-    return {...e,bets,status:done?(allW?"won":"lost"):"pending"};
+    const done = bets.every(b => b.result !== "pending");
+    const allW = bets.every(b => b.result === "won");
+    return {...e, bets, status: done ? (allW ? "won" : "lost") : "pending"};
   });
 
-  const wonCount     = settled.filter(e=>e.status==="won").length;
-  const settledCount = settled.filter(e=>e.status!=="pending").length;
-  const winRate      = settledCount ? Math.round(wonCount/settledCount*100) : null;
-  const totalWagered = history.reduce((a,e)=>a+e.totalStake,0);
-  const totalReturns = settled.filter(e=>e.status==="won").reduce((a,e)=>a+e.potReturn,0);
+  const wonCount     = settled.filter(e => e.status === "won").length;
+  const settledCount = settled.filter(e => e.status !== "pending").length;
+  const winRate      = settledCount ? Math.round(wonCount / settledCount * 100) : null;
+  const totalWagered = history.reduce((a, e) => a + e.totalStake, 0);
+  const totalReturns = settled.filter(e => e.status === "won").reduce((a, e) => a + e.potReturn, 0);
 
-  const upGames  = GAMES.filter(g=>g.st==="upcoming" && (cat==="All"||g.cat===cat));
-  const resGames = GAMES.filter(g=>g.st==="result"   && (cat==="All"||g.cat===cat));
-  const upcoming = GAMES.filter(g=>g.st==="upcoming");
+  const upGames  = GAMES.filter(g => g.st === "upcoming" && (cat === "All" || g.cat === cat));
+  const resGames = GAMES.filter(g => g.st === "result"   && (cat === "All" || g.cat === cat));
+  const upcoming = GAMES.filter(g => g.st === "upcoming");
 
-  // avg confidence
-  const avgConf = upcoming.length ? Math.round(upcoming.reduce((a,g)=>a+g.conf,0)/upcoming.length) : 0;
+  const avgConf = upcoming.length ? Math.round(upcoming.reduce((a, g) => a + g.conf, 0) / upcoming.length) : 0;
 
   return (
-    <div style={{background:COLORS.bg0, color:COLORS.text0, minHeight:"100vh",
-      fontFamily:"'Barlow', system-ui, sans-serif"}}>
+    <div style={{background:COLORS.bg0, color:COLORS.text0, minHeight:"100vh", fontFamily:"'Barlow', system-ui, sans-serif"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@600;700;800;900&display=swap');
         *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
@@ -384,7 +394,6 @@ export default function App() {
         ::-webkit-scrollbar-track { background:transparent; }
         ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:4px; }
 
-        /* Animations */
         @keyframes fadeUp   { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
         @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
         @keyframes slideR   { from{transform:translateX(100%)} to{transform:translateX(0)} }
@@ -394,19 +403,16 @@ export default function App() {
         @keyframes toastIn  { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
         @keyframes glowPulse{ 0%,100%{box-shadow:0 0 0 0 rgba(255,109,0,0.4)} 50%{box-shadow:0 0 16px 4px rgba(255,109,0,0.15)} }
 
-        .fadeUp  { animation:fadeUp .28s ease both; }
-        .spin    { animation:spin .75s linear infinite; display:inline-block; }
-        .pulse   { animation:pulse 1.8s ease infinite; }
-        .glowpulse { animation:glowPulse 2.4s ease infinite; }
+        .fadeUp   { animation:fadeUp .28s ease both; }
+        .spin     { animation:spin .75s linear infinite; display:inline-block; }
+        .pulse    { animation:pulse 1.8s ease infinite; }
+        .glowpulse{ animation:glowPulse 2.4s ease infinite; }
 
         .btn:active { transform:scale(0.95); transition:transform .1s; }
         .card-hover:hover { border-color:rgba(255,255,255,0.14) !important; }
         .odds-hover:hover { background:rgba(255,255,255,0.06) !important; border-color:rgba(255,255,255,0.2) !important; }
         .nav-item:hover { background:rgba(255,255,255,0.04) !important; }
 
-        /* ─── LAYOUT BREAKPOINTS ─── */
-
-        /* Mobile (<640px) */
         .layout { display:flex; flex-direction:column; min-height:100vh; }
         .sidebar { display:none !important; }
         .topbar-desktop { display:none !important; }
@@ -420,36 +426,33 @@ export default function App() {
         .page-pad   { padding:12px !important; }
         .mega-grid  { grid-template-columns:1fr !important; }
 
-        /* Tablet (640px–1024px) */
         @media (min-width:640px) {
           .slip-panel { width:380px !important; border-radius:0 !important; top:0 !important; bottom:0 !important; max-height:100vh !important; animation:slideR .3s cubic-bezier(0.4,0,0.2,1) !important; }
-          .topbar-mobile { display:none !important; }
+          .topbar-mobile  { display:none !important; }
           .topbar-desktop { display:flex !important; }
-          .bottom-nav  { display:flex !important; }
-          .main-area   { padding-bottom:70px; }
-          .cards-grid  { grid-template-columns:repeat(2,1fr) !important; }
-          .stats-grid  { grid-template-columns:repeat(4,1fr) !important; }
-          .filter-bar  { padding:0 20px 12px !important; }
-          .page-pad    { padding:16px 20px !important; }
-          .mega-grid   { grid-template-columns:repeat(3,1fr) !important; }
+          .bottom-nav     { display:flex !important; }
+          .main-area      { padding-bottom:70px; }
+          .cards-grid     { grid-template-columns:repeat(2,1fr) !important; }
+          .stats-grid     { grid-template-columns:repeat(4,1fr) !important; }
+          .filter-bar     { padding:0 20px 12px !important; }
+          .page-pad       { padding:16px 20px !important; }
+          .mega-grid      { grid-template-columns:repeat(3,1fr) !important; }
         }
 
-        /* Desktop (≥1024px) */
         @media (min-width:1024px) {
-          .sidebar { display:flex !important; }
+          .sidebar        { display:flex !important; }
           .topbar-desktop { display:flex !important; }
           .topbar-mobile  { display:none !important; }
           .bottom-nav     { display:none !important; }
-          .main-area { margin-left:230px !important; padding-bottom:0 !important; }
-          .cards-grid { grid-template-columns:repeat(auto-fill, minmax(300px,1fr)) !important; }
-          .filter-bar { padding:0 24px 12px !important; }
-          .page-pad   { padding:20px 24px !important; }
+          .main-area      { margin-left:230px !important; padding-bottom:0 !important; }
+          .cards-grid     { grid-template-columns:repeat(auto-fill, minmax(300px,1fr)) !important; }
+          .filter-bar     { padding:0 24px 12px !important; }
+          .page-pad       { padding:20px 24px !important; }
         }
 
-        /* Large desktop (≥1400px) */
         @media (min-width:1400px) {
-          .sidebar { width:260px !important; }
-          .main-area { margin-left:260px !important; }
+          .sidebar    { width:260px !important; }
+          .main-area  { margin-left:260px !important; }
         }
       `}</style>
 
@@ -459,78 +462,74 @@ export default function App() {
         background:COLORS.bg1, borderRight:`1px solid ${COLORS.border}`,
         flexDirection:"column", overflowY:"auto", display:"none"
       }}>
-        {/* Logo */}
         <div style={{padding:"18px 20px 14px", borderBottom:`1px solid ${COLORS.border}`}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:34,height:34,borderRadius:9,background:`linear-gradient(135deg,${COLORS.green},#00897b)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⚡</div>
+          <div style={{display:"flex", alignItems:"center", gap:10}}>
+            <div style={{width:34, height:34, borderRadius:9, background:`linear-gradient(135deg,${COLORS.green},#00897b)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18}}>⚡</div>
             <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,letterSpacing:"0.02em",lineHeight:1}}>BET<span style={{color:COLORS.green}}>AI</span></div>
-              <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.12em"}}>PREDICTION ENGINE</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:22, letterSpacing:"0.02em", lineHeight:1}}>BET<span style={{color:COLORS.green}}>AI</span></div>
+              <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.12em"}}>PREDICTION ENGINE</div>
             </div>
           </div>
         </div>
 
-        {/* Balance */}
-        <div style={{margin:"14px 14px 0",background:`linear-gradient(135deg,rgba(0,230,118,0.08),rgba(0,137,123,0.05))`,border:`1px solid ${COLORS.greenBorder}`,borderRadius:12,padding:"14px 16px"}}>
-          <div style={{fontSize:9,color:COLORS.green,letterSpacing:"0.12em",fontWeight:700,marginBottom:4}}>EUR BALANCE</div>
-          <div style={{fontFamily:"'Barlow Condensed',monospace",fontWeight:900,fontSize:28,color:COLORS.green,letterSpacing:"-0.01em",lineHeight:1}}>€{balance.toFixed(2)}</div>
-          <div style={{fontSize:10,color:COLORS.text2,marginTop:3}}>Available to bet</div>
-          <button className="btn" onClick={()=>setDepOpen(p=>!p)} style={{marginTop:10,width:"100%",padding:"8px",borderRadius:8,background:COLORS.greenFaint,border:`1px solid ${COLORS.greenBorder}`,color:COLORS.green,fontSize:12,fontWeight:700,letterSpacing:"0.06em"}}>+ DEPOSIT FUNDS</button>
-          {depOpen&&(
-            <div style={{marginTop:8,display:"flex",gap:6}}>
-              <input type="number" value={depVal} onChange={e=>setDepVal(e.target.value)}
-                style={{flex:1,background:COLORS.bg0,border:`1px solid ${COLORS.border}`,borderRadius:7,padding:"7px 10px",color:COLORS.text0,fontSize:13,outline:"none"}} placeholder="€ Amount" />
-              <button className="btn" onClick={deposit} style={{padding:"7px 14px",background:COLORS.green,borderRadius:7,color:COLORS.bg0,fontWeight:800,fontSize:13}}>OK</button>
+        <div style={{margin:"14px 14px 0", background:`linear-gradient(135deg,rgba(0,230,118,0.08),rgba(0,137,123,0.05))`, border:`1px solid ${COLORS.greenBorder}`, borderRadius:12, padding:"14px 16px"}}>
+          <div style={{fontSize:9, color:COLORS.green, letterSpacing:"0.12em", fontWeight:700, marginBottom:4}}>EUR BALANCE</div>
+          <div style={{fontFamily:"'Barlow Condensed',monospace", fontWeight:900, fontSize:28, color:COLORS.green, letterSpacing:"-0.01em", lineHeight:1}}>€{balance.toFixed(2)}</div>
+          <div style={{fontSize:10, color:COLORS.text2, marginTop:3}}>Available to bet</div>
+          <button className="btn" onClick={() => setDepOpen(p => !p)} style={{marginTop:10, width:"100%", padding:"8px", borderRadius:8, background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, color:COLORS.green, fontSize:12, fontWeight:700, letterSpacing:"0.06em"}}>+ DEPOSIT FUNDS</button>
+          {depOpen && (
+            <div style={{marginTop:8, display:"flex", gap:6}}>
+              <input type="number" value={depVal} onChange={e => setDepVal(e.target.value)}
+                style={{flex:1, background:COLORS.bg0, border:`1px solid ${COLORS.border}`, borderRadius:7, padding:"7px 10px", color:COLORS.text0, fontSize:13, outline:"none"}} placeholder="€ Amount" />
+              <button className="btn" onClick={deposit} style={{padding:"7px 14px", background:COLORS.green, borderRadius:7, color:COLORS.bg0, fontWeight:800, fontSize:13}}>OK</button>
             </div>
           )}
         </div>
 
-        {/* Nav */}
-        <nav style={{padding:"10px 10px 0",flex:1}}>
-          <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.14em",padding:"10px 8px 5px",fontWeight:700}}>MENU</div>
+        <nav style={{padding:"10px 10px 0", flex:1}}>
+          <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.14em", padding:"10px 8px 5px", fontWeight:700}}>MENU</div>
           {[
             {id:"home",    icon:"🏠", label:"Home"},
             {id:"matches", icon:"⚽", label:"Matches", badge:upGames.length},
             {id:"results", icon:"📊", label:"Results"},
             {id:"mybets",  icon:"🎫", label:"My Bets", badge:history.length||null},
-          ].map(n=>(
-            <button key={n.id} className="nav-item btn" onClick={()=>setPage(n.id)}
-              style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 10px",borderRadius:9,fontSize:13,
-                fontWeight:page===n.id?700:500, marginBottom:2,textAlign:"left",
+          ].map(n => (
+            <button key={n.id} className="nav-item btn" onClick={() => setPage(n.id)}
+              style={{width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 10px", borderRadius:9, fontSize:13,
+                fontWeight:page===n.id?700:500, marginBottom:2, textAlign:"left",
                 background:page===n.id?"rgba(0,230,118,0.09)":"transparent",
                 color:page===n.id?COLORS.green:COLORS.text1}}>
               <span style={{fontSize:16}}>{n.icon}</span>
               <span style={{flex:1}}>{n.label}</span>
-              {n.badge?<span style={{background:page===n.id?COLORS.green:COLORS.bg3,color:page===n.id?COLORS.bg0:COLORS.text1,borderRadius:999,padding:"0 7px",fontSize:10,fontWeight:800,lineHeight:"18px"}}>{n.badge}</span>:null}
+              {n.badge ? <span style={{background:page===n.id?COLORS.green:COLORS.bg3, color:page===n.id?COLORS.bg0:COLORS.text1, borderRadius:999, padding:"0 7px", fontSize:10, fontWeight:800, lineHeight:"18px"}}>{n.badge}</span> : null}
             </button>
           ))}
 
-          <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.14em",padding:"14px 8px 5px",fontWeight:700}}>LEAGUES</div>
-          {CATS.map(c=>(
-            <button key={c} className="nav-item btn" onClick={()=>setCat(c)}
-              style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,fontSize:12,
-                fontWeight:cat===c?700:400, marginBottom:1,textAlign:"left",
+          <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.14em", padding:"14px 8px 5px", fontWeight:700}}>LEAGUES</div>
+          {CATS.map(c => (
+            <button key={c} className="nav-item btn" onClick={() => setCat(c)}
+              style={{width:"100%", display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:8, fontSize:12,
+                fontWeight:cat===c?700:400, marginBottom:1, textAlign:"left",
                 background:cat===c?"rgba(0,230,118,0.06)":"transparent",
                 color:cat===c?COLORS.green:COLORS.text2}}>
-              <span>{GAMES.find(g=>g.cat===c)?.flag||"🌍"}</span>
-              {c==="All"?"All Leagues":LEAGUES_LABEL[c]||c}
-              {cat===c&&<span style={{marginLeft:"auto",width:6,height:6,borderRadius:"50%",background:COLORS.green}}/>}
+              <span>{GAMES.find(g => g.cat===c)?.flag || "🌍"}</span>
+              {c==="All" ? "All Leagues" : LEAGUES_LABEL[c] || c}
+              {cat===c && <span style={{marginLeft:"auto", width:6, height:6, borderRadius:"50%", background:COLORS.green}}/>}
             </button>
           ))}
         </nav>
 
-        {/* Sidebar stats */}
-        <div style={{padding:"12px 14px 16px",borderTop:`1px solid ${COLORS.border}`}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+        <div style={{padding:"12px 14px 16px", borderTop:`1px solid ${COLORS.border}`}}>
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:7}}>
             {[
               {label:"Win Rate", val:winRate!==null?`${winRate}%`:"74%", col:COLORS.green},
               {label:"Bets",     val:history.length,                      col:COLORS.blue},
               {label:"Wagered",  val:`€${totalWagered.toFixed(0)}`,       col:COLORS.text0},
               {label:"Returns",  val:`€${totalReturns.toFixed(0)}`,       col:totalReturns>=totalWagered?COLORS.green:COLORS.red},
-            ].map(s=>(
-              <div key={s.label} style={{background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:9,padding:"9px 10px"}}>
-                <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.08em",marginBottom:4,fontWeight:600}}>{s.label.toUpperCase()}</div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:s.col}}>{s.val}</div>
+            ].map(s => (
+              <div key={s.label} style={{background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:9, padding:"9px 10px"}}>
+                <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.08em", marginBottom:4, fontWeight:600}}>{s.label.toUpperCase()}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:18, color:s.col}}>{s.val}</div>
               </div>
             ))}
           </div>
@@ -539,94 +538,94 @@ export default function App() {
 
       {/* ═══════════════════ MOBILE TOPBAR ═══════════════════════ */}
       <header className="topbar-mobile" style={{
-        position:"sticky",top:0,zIndex:80,height:54,
-        background:"rgba(7,8,16,0.97)",backdropFilter:"blur(20px)",
+        position:"sticky", top:0, zIndex:80, height:54,
+        background:"rgba(7,8,16,0.97)", backdropFilter:"blur(20px)",
         borderBottom:`1px solid ${COLORS.border}`,
-        padding:"0 14px",alignItems:"center",justifyContent:"space-between",display:"none"
+        padding:"0 14px", alignItems:"center", justifyContent:"space-between", display:"none"
       }}>
-        <button className="btn" onClick={()=>setSidebarOpen(true)} style={{fontSize:22,color:COLORS.text1,padding:"4px",display:"flex",alignItems:"center"}}>☰</button>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,letterSpacing:"0.04em"}}>
+        <button className="btn" onClick={() => setSidebarOpen(true)} style={{fontSize:22, color:COLORS.text1, padding:"4px", display:"flex", alignItems:"center"}}>☰</button>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:22, letterSpacing:"0.04em"}}>
           BET<span style={{color:COLORS.green}}>AI</span>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <button className="btn" onClick={()=>setDepOpen(p=>!p)}
-            style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:COLORS.green,letterSpacing:"-0.01em"}}>
+        <div style={{display:"flex", alignItems:"center", gap:8}}>
+          <button className="btn" onClick={() => setDepOpen(p => !p)}
+            style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:17, color:COLORS.green, letterSpacing:"-0.01em"}}>
             €{balance.toFixed(2)}
           </button>
-          <button className="btn" onClick={()=>setSlipOpen(p=>!p)}
-            style={{position:"relative",width:38,height:38,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,
+          <button className="btn" onClick={() => setSlipOpen(p => !p)}
+            style={{position:"relative", width:38, height:38, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
               background:slip.length>0?COLORS.greenFaint:COLORS.bg2,
               border:`1px solid ${slip.length>0?COLORS.greenBorder:COLORS.border}`}}>
             🎫
-            {slip.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:COLORS.orange,color:"#fff",borderRadius:999,fontSize:9,fontWeight:800,minWidth:16,height:16,lineHeight:"16px",textAlign:"center",padding:"0 3px"}}>{slip.length}</span>}
+            {slip.length>0 && <span style={{position:"absolute", top:-4, right:-4, background:COLORS.orange, color:"#fff", borderRadius:999, fontSize:9, fontWeight:800, minWidth:16, height:16, lineHeight:"16px", textAlign:"center", padding:"0 3px"}}>{slip.length}</span>}
           </button>
         </div>
       </header>
 
       {/* ═══════════════════ DESKTOP TOPBAR ══════════════════════ */}
       <header className="topbar-desktop" style={{
-        position:"sticky",top:0,zIndex:50,height:56,marginLeft:230,
-        background:"rgba(7,8,16,0.97)",backdropFilter:"blur(20px)",
+        position:"sticky", top:0, zIndex:50, height:56, marginLeft:230,
+        background:"rgba(7,8,16,0.97)", backdropFilter:"blur(20px)",
         borderBottom:`1px solid ${COLORS.border}`,
-        padding:"0 24px",alignItems:"center",justifyContent:"space-between",display:"none",gap:12
+        padding:"0 24px", alignItems:"center", justifyContent:"space-between", display:"none", gap:12
       }}>
         <div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,letterSpacing:"0.1em",color:COLORS.text0}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:14, letterSpacing:"0.1em", color:COLORS.text0}}>
             {page==="home"?"TODAY'S OVERVIEW":page==="matches"?"UPCOMING MATCHES":page==="results"?"RECENT RESULTS":"MY BET HISTORY"}
           </div>
-          <div style={{fontSize:11,color:COLORS.text2,marginTop:1}}>
-            {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+          <div style={{fontSize:11, color:COLORS.text2, marginTop:1}}>
+            {new Date().toLocaleDateString("en-GB", {weekday:"long", day:"numeric", month:"long", year:"numeric"})}
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          {toast&&toast.type==="ok"&&<div style={{fontSize:11,color:COLORS.green,background:COLORS.greenFaint,border:`1px solid ${COLORS.greenBorder}`,borderRadius:20,padding:"5px 14px",fontWeight:600,animation:"fadeIn .2s ease"}}>{toast.msg}</div>}
-          <button className="btn" onClick={()=>setSlipOpen(p=>!p)}
-            style={{display:"flex",alignItems:"center",gap:8,padding:"7px 16px",borderRadius:9,
+        <div style={{display:"flex", alignItems:"center", gap:10}}>
+          {toast && toast.type==="ok" && <div style={{fontSize:11, color:COLORS.green, background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:20, padding:"5px 14px", fontWeight:600, animation:"fadeIn .2s ease"}}>{toast.msg}</div>}
+          <button className="btn" onClick={() => setSlipOpen(p => !p)}
+            style={{display:"flex", alignItems:"center", gap:8, padding:"7px 16px", borderRadius:9,
               border:`1px solid ${slip.length>0?COLORS.greenBorder:COLORS.border}`,
               background:slip.length>0?COLORS.greenFaint:"transparent",
-              color:slip.length>0?COLORS.green:COLORS.text1,fontSize:12,fontWeight:700}}>
+              color:slip.length>0?COLORS.green:COLORS.text1, fontSize:12, fontWeight:700}}>
             🎫 Bet Slip
-            {slip.length>0&&<span style={{background:COLORS.green,color:COLORS.bg0,borderRadius:999,padding:"0 8px",fontSize:10,fontWeight:800,lineHeight:"18px"}}>{slip.length}</span>}
+            {slip.length>0 && <span style={{background:COLORS.green, color:COLORS.bg0, borderRadius:999, padding:"0 8px", fontSize:10, fontWeight:800, lineHeight:"18px"}}>{slip.length}</span>}
           </button>
         </div>
       </header>
 
       {/* ═══════════════════ MOBILE SIDEBAR DRAWER ═══════════════ */}
-      {sidebarOpen&&(
+      {sidebarOpen && (
         <>
-          <div onClick={()=>setSidebarOpen(false)} style={{position:"fixed",inset:0,zIndex:89,background:"rgba(0,0,0,0.7)",backdropFilter:"blur(4px)"}}/>
-          <div style={{position:"fixed",top:0,left:0,bottom:0,width:260,zIndex:90,background:COLORS.bg1,
-            borderRight:`1px solid ${COLORS.border}`,display:"flex",flexDirection:"column",
-            animation:"fadeUp .25s ease",overflowY:"auto"}}>
-            <div style={{padding:"16px 18px",borderBottom:`1px solid ${COLORS.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22}}>BET<span style={{color:COLORS.green}}>AI</span></div>
-              <button onClick={()=>setSidebarOpen(false)} style={{fontSize:22,color:COLORS.text2,lineHeight:1}}>×</button>
+          <div onClick={() => setSidebarOpen(false)} style={{position:"fixed", inset:0, zIndex:89, background:"rgba(0,0,0,0.7)", backdropFilter:"blur(4px)"}}/>
+          <div style={{position:"fixed", top:0, left:0, bottom:0, width:260, zIndex:90, background:COLORS.bg1,
+            borderRight:`1px solid ${COLORS.border}`, display:"flex", flexDirection:"column",
+            animation:"fadeUp .25s ease", overflowY:"auto"}}>
+            <div style={{padding:"16px 18px", borderBottom:`1px solid ${COLORS.border}`, display:"flex", alignItems:"center", justifyContent:"space-between"}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:22}}>BET<span style={{color:COLORS.green}}>AI</span></div>
+              <button onClick={() => setSidebarOpen(false)} style={{fontSize:22, color:COLORS.text2, lineHeight:1}}>×</button>
             </div>
-            <div style={{margin:"12px 12px 0",background:COLORS.greenFaint,border:`1px solid ${COLORS.greenBorder}`,borderRadius:10,padding:"12px 14px"}}>
-              <div style={{fontSize:9,color:COLORS.green,letterSpacing:"0.1em",fontWeight:700,marginBottom:3}}>BALANCE</div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:24,color:COLORS.green}}>€{balance.toFixed(2)}</div>
-              <div style={{display:"flex",gap:5,marginTop:8}}>
-                {[20,50,100].map(a=>(
-                  <button key={a} className="btn" onClick={()=>{setBalance(p=>+(p+a).toFixed(2));toast$(`€${a} added`);setSidebarOpen(false);}}
-                    style={{flex:1,padding:"5px",borderRadius:6,background:COLORS.bg2,border:`1px solid ${COLORS.border}`,fontSize:11,fontWeight:700,color:COLORS.green}}>+€{a}</button>
+            <div style={{margin:"12px 12px 0", background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:10, padding:"12px 14px"}}>
+              <div style={{fontSize:9, color:COLORS.green, letterSpacing:"0.1em", fontWeight:700, marginBottom:3}}>BALANCE</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:24, color:COLORS.green}}>€{balance.toFixed(2)}</div>
+              <div style={{display:"flex", gap:5, marginTop:8}}>
+                {[20, 50, 100].map(a => (
+                  <button key={a} className="btn" onClick={() => { setBalance(p => +(p+a).toFixed(2)); toast$(`€${a} added`); setSidebarOpen(false); }}
+                    style={{flex:1, padding:"5px", borderRadius:6, background:COLORS.bg2, border:`1px solid ${COLORS.border}`, fontSize:11, fontWeight:700, color:COLORS.green}}>+€{a}</button>
                 ))}
               </div>
             </div>
-            <nav style={{padding:"8px 10px",flex:1}}>
-              {[{id:"home",icon:"🏠",label:"Home"},{id:"matches",icon:"⚽",label:"Matches"},{id:"results",icon:"📊",label:"Results"},{id:"mybets",icon:"🎫",label:"My Bets"}].map(n=>(
-                <button key={n.id} className="btn" onClick={()=>{setPage(n.id);setSidebarOpen(false);}}
-                  style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 10px",borderRadius:9,fontSize:14,fontWeight:page===n.id?700:500,marginBottom:3,textAlign:"left",
-                    background:page===n.id?"rgba(0,230,118,0.09)":"transparent",color:page===n.id?COLORS.green:COLORS.text1}}>
+            <nav style={{padding:"8px 10px", flex:1}}>
+              {[{id:"home",icon:"🏠",label:"Home"},{id:"matches",icon:"⚽",label:"Matches"},{id:"results",icon:"📊",label:"Results"},{id:"mybets",icon:"🎫",label:"My Bets"}].map(n => (
+                <button key={n.id} className="btn" onClick={() => { setPage(n.id); setSidebarOpen(false); }}
+                  style={{width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 10px", borderRadius:9, fontSize:14, fontWeight:page===n.id?700:500, marginBottom:3, textAlign:"left",
+                    background:page===n.id?"rgba(0,230,118,0.09)":"transparent", color:page===n.id?COLORS.green:COLORS.text1}}>
                   <span>{n.icon}</span>{n.label}
                 </button>
               ))}
-              <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.12em",padding:"12px 8px 5px",fontWeight:700}}>LEAGUES</div>
-              {CATS.map(c=>(
-                <button key={c} className="btn" onClick={()=>{setCat(c);setSidebarOpen(false);}}
-                  style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,fontSize:13,fontWeight:cat===c?700:400,marginBottom:1,textAlign:"left",
-                    background:cat===c?"rgba(0,230,118,0.06)":"transparent",color:cat===c?COLORS.green:COLORS.text2}}>
-                  <span>{GAMES.find(g=>g.cat===c)?.flag||"🌍"}</span>
-                  {c==="All"?"All Leagues":LEAGUES_LABEL[c]||c}
+              <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.12em", padding:"12px 8px 5px", fontWeight:700}}>LEAGUES</div>
+              {CATS.map(c => (
+                <button key={c} className="btn" onClick={() => { setCat(c); setSidebarOpen(false); }}
+                  style={{width:"100%", display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:8, fontSize:13, fontWeight:cat===c?700:400, marginBottom:1, textAlign:"left",
+                    background:cat===c?"rgba(0,230,118,0.06)":"transparent", color:cat===c?COLORS.green:COLORS.text2}}>
+                  <span>{GAMES.find(g => g.cat===c)?.flag || "🌍"}</span>
+                  {c==="All" ? "All Leagues" : LEAGUES_LABEL[c] || c}
                 </button>
               ))}
             </nav>
@@ -635,38 +634,52 @@ export default function App() {
       )}
 
       {/* Mobile deposit bar */}
-      {depOpen&&(
-        <div style={{position:"fixed",top:54,left:0,right:0,zIndex:79,background:COLORS.bg1,borderBottom:`1px solid ${COLORS.border}`,padding:"12px 14px",display:"flex",gap:8,alignItems:"center",animation:"fadeUp .2s ease"}}>
-          {[20,50,100,200].map(a=>(
-            <button key={a} className="btn" onClick={()=>setDepVal(String(a))}
-              style={{flex:1,padding:"8px 0",borderRadius:8,fontSize:12,fontWeight:700,
+      {depOpen && (
+        <div style={{position:"fixed", top:54, left:0, right:0, zIndex:79, background:COLORS.bg1, borderBottom:`1px solid ${COLORS.border}`, padding:"12px 14px", display:"flex", gap:8, alignItems:"center", animation:"fadeUp .2s ease"}}>
+          {[20, 50, 100, 200].map(a => (
+            <button key={a} className="btn" onClick={() => setDepVal(String(a))}
+              style={{flex:1, padding:"8px 0", borderRadius:8, fontSize:12, fontWeight:700,
                 background:depVal===String(a)?COLORS.greenFaint:COLORS.bg2,
                 border:`1px solid ${depVal===String(a)?COLORS.greenBorder:COLORS.border}`,
                 color:depVal===String(a)?COLORS.green:COLORS.text1}}>€{a}</button>
           ))}
-          <button className="btn" onClick={deposit} style={{padding:"8px 16px",borderRadius:8,background:COLORS.green,color:COLORS.bg0,fontWeight:800,fontSize:13}}>ADD</button>
-          <button onClick={()=>setDepOpen(false)} style={{color:COLORS.text2,fontSize:22,lineHeight:1}}>×</button>
+          <button className="btn" onClick={deposit} style={{padding:"8px 16px", borderRadius:8, background:COLORS.green, color:COLORS.bg0, fontWeight:800, fontSize:13}}>ADD</button>
+          <button onClick={() => setDepOpen(false)} style={{color:COLORS.text2, fontSize:22, lineHeight:1}}>×</button>
+        </div>
+      )}
+
+      {/* ═══════════════════ TOAST ════════════════════════════════ */}
+      {toast && (
+        <div style={{
+          position:"fixed", top:64, right:14, zIndex:200,
+          background:toast.type==="err"?"#2a0808":toast.type==="mega"?"#1f1200":COLORS.bg2,
+          border:`1px solid ${toast.type==="err"?COLORS.red:toast.type==="mega"?COLORS.orange:COLORS.greenBorder}`,
+          color:toast.type==="err"?COLORS.red:toast.type==="mega"?COLORS.orange:COLORS.green,
+          borderRadius:10, padding:"9px 14px", fontSize:12, fontWeight:700,
+          animation:"toastIn .25s ease", maxWidth:260
+        }}>
+          {toast.msg}
         </div>
       )}
 
       {/* ═══════════════════ MAIN CONTENT ════════════════════════ */}
       <div className="main-area" style={{position:"relative"}}>
 
-        {/* Filter bar (all pages except mybets) */}
-        {page!=="mybets"&&(
-          <div className="filter-bar" style={{borderBottom:`1px solid ${COLORS.border}`,background:COLORS.bg1}}>
-            <div style={{display:"flex",gap:6,overflowX:"auto",paddingTop:10,scrollbarWidth:"none",msOverflowStyle:"none"}}>
-              {CATS.map(c=>(
-                <button key={c} className="btn" onClick={()=>setCat(c)} style={{
-                  flexShrink:0,padding:"5px 14px",borderRadius:999,fontSize:11,fontWeight:700,letterSpacing:"0.04em",
+        {/* Filter bar */}
+        {page !== "mybets" && (
+          <div className="filter-bar" style={{borderBottom:`1px solid ${COLORS.border}`, background:COLORS.bg1}}>
+            <div style={{display:"flex", gap:6, overflowX:"auto", paddingTop:10, scrollbarWidth:"none", msOverflowStyle:"none"}}>
+              {CATS.map(c => (
+                <button key={c} className="btn" onClick={() => setCat(c)} style={{
+                  flexShrink:0, padding:"5px 14px", borderRadius:999, fontSize:11, fontWeight:700, letterSpacing:"0.04em",
                   background:cat===c?COLORS.greenFaint:"transparent",
                   border:`1px solid ${cat===c?COLORS.greenBorder:COLORS.border}`,
                   color:cat===c?COLORS.green:COLORS.text2}}>
-                  {c==="All"?"All":c}
+                  {c==="All" ? "All" : c}
                 </button>
               ))}
-              <span style={{marginLeft:"auto",flexShrink:0,fontSize:11,color:COLORS.text2,display:"flex",alignItems:"center",gap:4,paddingRight:2}}>
-                {page==="results"?resGames.length:upGames.length} matches
+              <span style={{marginLeft:"auto", flexShrink:0, fontSize:11, color:COLORS.text2, display:"flex", alignItems:"center", gap:4, paddingRight:2}}>
+                {page==="results" ? resGames.length : upGames.length} matches
               </span>
             </div>
           </div>
@@ -675,77 +688,76 @@ export default function App() {
         <div className="page-pad">
 
           {/* ─── HOME PAGE ─────────────────────────────── */}
-          {page==="home"&&(
+          {page === "home" && (
             <>
-              {/* Stats row */}
-              <div className="stats-grid" style={{display:"grid",gap:10,marginBottom:18}}>
+              <div className="stats-grid" style={{display:"grid", gap:10, marginBottom:18}}>
                 {[
-                  {icon:"🎯",label:"AI Win Rate",val:winRate!==null?`${winRate}%`:"74%",sub:"Last 30 days",col:COLORS.green},
-                  {icon:"⚽",label:"Today's Tips",val:upcoming.length,sub:`${upcoming.filter(g=>g.conf>=80).length} high-confidence`,col:COLORS.blue},
-                  {icon:"📈",label:"Avg Confidence",val:`${avgConf}%`,sub:"All upcoming games",col:COLORS.gold},
-                  {icon:"💰",label:"Potential Return",val:slip.length>0?`€${potReturn.toFixed(2)}`:"—",sub:slip.length>0?`${slip.length} selections`:"Add selections",col:slip.length>0?COLORS.green:COLORS.text2},
-                ].map((s,i)=>(
+                  {icon:"🎯", label:"AI Win Rate",     val:winRate!==null?`${winRate}%`:"74%",            sub:"Last 30 days",                                  col:COLORS.green},
+                  {icon:"⚽", label:"Today's Tips",    val:upcoming.length,                               sub:`${upcoming.filter(g=>g.conf>=80).length} high-confidence`, col:COLORS.blue},
+                  {icon:"📈", label:"Avg Confidence",  val:`${avgConf}%`,                                 sub:"All upcoming games",                             col:COLORS.gold},
+                  {icon:"💰", label:"Potential Return", val:slip.length>0?`€${potReturn.toFixed(2)}`:"—", sub:slip.length>0?`${slip.length} selections`:"Add selections", col:slip.length>0?COLORS.green:COLORS.text2},
+                ].map((s, i) => (
                   <div key={i} className="card-hover" onClick={i===3&&slip.length>0?()=>setSlipOpen(true):undefined}
-                    style={{background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:13,padding:"14px 16px",cursor:i===3&&slip.length>0?"pointer":"default"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                    style={{background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:13, padding:"14px 16px", cursor:i===3&&slip.length>0?"pointer":"default"}}>
+                    <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:8}}>
                       <span style={{fontSize:14}}>{s.icon}</span>
-                      <span style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.1em",fontWeight:700}}>{s.label.toUpperCase()}</span>
+                      <span style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.1em", fontWeight:700}}>{s.label.toUpperCase()}</span>
                     </div>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:24,color:s.col,letterSpacing:"-0.01em",lineHeight:1}}>{s.val}</div>
-                    <div style={{fontSize:10,color:COLORS.text2,marginTop:5}}>{s.sub}</div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:24, color:s.col, letterSpacing:"-0.01em", lineHeight:1}}>{s.val}</div>
+                    <div style={{fontSize:10, color:COLORS.text2, marginTop:5}}>{s.sub}</div>
                   </div>
                 ))}
               </div>
 
               {/* Mega Picks */}
               <div style={{marginBottom:18}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <div style={{width:4,height:22,borderRadius:2,background:COLORS.orange}}/>
-                    <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:18,letterSpacing:"0.03em"}}>🔥 MEGA SURE PICKS</span>
-                    <span style={{fontSize:9,color:COLORS.orange,background:COLORS.orangeFaint,border:`1px solid ${COLORS.orangeBorder}`,borderRadius:5,padding:"2px 8px",fontWeight:800}}>TODAY · 3 PICKS</span>
+                <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
+                  <div style={{display:"flex", alignItems:"center", gap:8}}>
+                    <div style={{width:4, height:22, borderRadius:2, background:COLORS.orange}}/>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18, letterSpacing:"0.03em"}}>🔥 MEGA SURE PICKS</span>
+                    <span style={{fontSize:9, color:COLORS.orange, background:COLORS.orangeFaint, border:`1px solid ${COLORS.orangeBorder}`, borderRadius:5, padding:"2px 8px", fontWeight:800}}>TODAY · 3 PICKS</span>
                   </div>
                 </div>
 
-                <div className="mega-grid" style={{display:"grid",gap:10}}>
-                  {MEGA.map((m,i)=>{
+                <div className="mega-grid" style={{display:"grid", gap:10}}>
+                  {MEGA.map((m, i) => {
                     const inS = inSlip(m.id);
                     return (
-                      <div key={m.id} className={`card-hover glowpulse fadeUp`}
+                      <div key={m.id} className="card-hover glowpulse fadeUp"
                         style={{background:`linear-gradient(135deg,rgba(255,109,0,0.08) 0%,rgba(30,20,5,0.95) 60%)`,
-                          border:`1px solid ${COLORS.orangeBorder}`,borderRadius:14,overflow:"hidden",
-                          animationDelay:`${i*0.07}s`,animationFillMode:"both"}}>
+                          border:`1px solid ${COLORS.orangeBorder}`, borderRadius:14, overflow:"hidden",
+                          animationDelay:`${i*0.07}s`, animationFillMode:"both"}}>
                         <div style={{padding:"14px 16px"}}>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
+                            <div style={{display:"flex", alignItems:"center", gap:6}}>
                               <span>{m.flag}</span>
-                              <span style={{fontSize:10,color:COLORS.text1,fontWeight:600}}>{m.league}</span>
-                              <span style={{fontSize:9,background:COLORS.orangeFaint,color:COLORS.orange,borderRadius:4,padding:"1px 6px",fontWeight:800}}>MEGA SURE</span>
+                              <span style={{fontSize:10, color:COLORS.text1, fontWeight:600}}>{m.league}</span>
+                              <span style={{fontSize:9, background:COLORS.orangeFaint, color:COLORS.orange, borderRadius:4, padding:"1px 6px", fontWeight:800}}>MEGA SURE</span>
                             </div>
-                            <div style={{display:"flex",alignItems:"center",gap:5}}>
-                              <span style={{fontSize:11,fontFamily:"'Barlow Condensed',sans-serif",color:COLORS.gold,fontWeight:800,background:COLORS.goldFaint,border:`1px solid ${COLORS.goldBorder}`,borderRadius:5,padding:"2px 8px"}}>{m.odds.toFixed(2)}</span>
-                              <span style={{fontSize:9,color:COLORS.gold,fontWeight:800,background:"rgba(255,215,64,0.08)",border:`1px solid ${COLORS.goldBorder}`,borderRadius:4,padding:"1px 6px"}}>{m.conf}%</span>
+                            <div style={{display:"flex", alignItems:"center", gap:5}}>
+                              <span style={{fontSize:11, fontFamily:"'Barlow Condensed',sans-serif", color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"2px 8px"}}>{m.odds.toFixed(2)}</span>
+                              <span style={{fontSize:9, color:COLORS.gold, fontWeight:800, background:"rgba(255,215,64,0.08)", border:`1px solid ${COLORS.goldBorder}`, borderRadius:4, padding:"1px 6px"}}>{m.conf}%</span>
                             </div>
                           </div>
-                          <div style={{fontWeight:800,fontSize:15,marginBottom:3,lineHeight:1.3}}>{m.home} <span style={{color:COLORS.text2,fontWeight:400,fontSize:12}}>vs</span> {m.away}</div>
-                          <div style={{fontSize:10,color:COLORS.text2,marginBottom:10}}>{m.display}</div>
-                          <p style={{fontSize:12,color:COLORS.text1,lineHeight:1.75,marginBottom:10}}>{m.analysis}</p>
-                          <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:12}}>
-                            {m.tips.map((t,j)=>(
-                              <div key={j} style={{display:"flex",gap:6,fontSize:11,color:COLORS.text2}}>
-                                <span style={{color:COLORS.orange,flexShrink:0}}>›</span><span>{t}</span>
+                          <div style={{fontWeight:800, fontSize:15, marginBottom:3, lineHeight:1.3}}>{m.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:12}}>vs</span> {m.away}</div>
+                          <div style={{fontSize:10, color:COLORS.text2, marginBottom:10}}>{m.display}</div>
+                          <p style={{fontSize:12, color:COLORS.text1, lineHeight:1.75, marginBottom:10}}>{m.analysis}</p>
+                          <div style={{display:"flex", flexDirection:"column", gap:4, marginBottom:12}}>
+                            {m.tips.map((t, j) => (
+                              <div key={j} style={{display:"flex", gap:6, fontSize:11, color:COLORS.text2}}>
+                                <span style={{color:COLORS.orange, flexShrink:0}}>›</span><span>{t}</span>
                               </div>
                             ))}
                           </div>
-                          <div style={{display:"flex",alignItems:"center",gap:8}}>
-                            <div style={{flex:1,background:`rgba(255,109,0,0.12)`,border:`1px solid ${COLORS.orangeBorder}`,borderRadius:8,padding:"7px 12px",textAlign:"center"}}>
-                              <div style={{fontSize:11,color:COLORS.orange,fontWeight:800}}>{m.pickLabel}</div>
+                          <div style={{display:"flex", alignItems:"center", gap:8}}>
+                            <div style={{flex:1, background:`rgba(255,109,0,0.12)`, border:`1px solid ${COLORS.orangeBorder}`, borderRadius:8, padding:"7px 12px", textAlign:"center"}}>
+                              <div style={{fontSize:11, color:COLORS.orange, fontWeight:800}}>{m.pickLabel}</div>
                             </div>
-                            <button className="btn" onClick={()=>addMega(m)}
-                              style={{width:40,height:36,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,
-                                background:inS?COLORS.greenFaint:COLORS.bg2,border:`1px solid ${inS?COLORS.greenBorder:COLORS.border}`,
+                            <button className="btn" onClick={() => addMega(m)}
+                              style={{width:40, height:36, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
+                                background:inS?COLORS.greenFaint:COLORS.bg2, border:`1px solid ${inS?COLORS.greenBorder:COLORS.border}`,
                                 color:inS?COLORS.green:COLORS.text1}}>
-                              {inS?"✓":"+"}
+                              {inS ? "✓" : "+"}
                             </button>
                           </div>
                         </div>
@@ -754,27 +766,26 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Add all button */}
-                <button className="btn" onClick={()=>{ MEGA.forEach(m=>{if(!inSlip(m.id))addMega(m);}); }}
-                  style={{width:"100%",marginTop:10,padding:"13px",borderRadius:12,
+                <button className="btn" onClick={() => { MEGA.forEach(m => { if (!inSlip(m.id)) addMega(m); }); }}
+                  style={{width:"100%", marginTop:10, padding:"13px", borderRadius:12,
                     background:`linear-gradient(90deg,${COLORS.orange},#ff8f00)`,
-                    color:"#fff",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:15,letterSpacing:"0.06em"}}>
+                    color:"#fff", fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:15, letterSpacing:"0.06em"}}>
                   🔥 ADD ALL 3 MEGA PICKS TO SLIP
                 </button>
               </div>
 
-              {/* Tonight preview */}
+              {/* UCL preview */}
               <div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <div style={{width:4,height:22,borderRadius:2,background:COLORS.blue}}/>
-                    <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16}}>⭐ TONIGHT'S UCL ACTION</span>
+                <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
+                  <div style={{display:"flex", alignItems:"center", gap:8}}>
+                    <div style={{width:4, height:22, borderRadius:2, background:COLORS.blue}}/>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:16}}>⭐ TONIGHT'S UCL ACTION</span>
                   </div>
-                  <button className="btn" onClick={()=>{setCat("UCL");setPage("matches");}} style={{fontSize:11,color:COLORS.blue,fontWeight:700}}>View all →</button>
+                  <button className="btn" onClick={() => { setCat("UCL"); setPage("matches"); }} style={{fontSize:11, color:COLORS.blue, fontWeight:700}}>View all →</button>
                 </div>
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {GAMES.filter(g=>g.st==="upcoming"&&g.cat==="UCL"&&g.kick.startsWith("2026-04-07")).map(g=>(
-                    <CompactRow key={g.id} game={g} inSlip={inSlip(g.id)} onAdd={pick=>addToSlip(g,pick)} />
+                <div style={{display:"flex", flexDirection:"column", gap:8}}>
+                  {GAMES.filter(g => g.st==="upcoming" && g.cat==="UCL" && g.kick.startsWith("2026-04-07")).map(g => (
+                    <CompactRow key={g.id} game={g} inSlip={inSlip(g.id)} onAdd={pick => addToSlip(g, pick)} />
                   ))}
                 </div>
               </div>
@@ -782,131 +793,129 @@ export default function App() {
           )}
 
           {/* ─── MATCHES PAGE ──────────────────────────── */}
-          {page==="matches"&&(
+          {page === "matches" && (
             <>
-              <div style={{fontSize:11,color:COLORS.text2,marginBottom:12,fontWeight:500}}>
+              <div style={{fontSize:11, color:COLORS.text2, marginBottom:12, fontWeight:500}}>
                 Showing {upGames.length} upcoming {cat!=="All"?(LEAGUES_LABEL[cat]||cat):"all-league"} matches
               </div>
-              <div className="cards-grid" style={{display:"grid",gap:12}}>
-                {upGames.map((g,i)=>(
+              <div className="cards-grid" style={{display:"grid", gap:12}}>
+                {upGames.map((g, i) => (
                   <MatchCard key={g.id} game={g} inSlip={inSlip(g.id)}
                     expanded={expanded===g.id}
-                    onExpand={()=>setExpanded(expanded===g.id?null:g.id)}
-                    onAdd={pick=>addToSlip(g,pick)}
+                    onExpand={() => setExpanded(expanded===g.id ? null : g.id)}
+                    onAdd={pick => addToSlip(g, pick)}
                     delay={i*0.04} />
                 ))}
-                {upGames.length===0&&<EmptyState msg="No upcoming matches for this filter."/>}
+                {upGames.length === 0 && <EmptyState msg="No upcoming matches for this filter."/>}
               </div>
             </>
           )}
 
           {/* ─── RESULTS PAGE ──────────────────────────── */}
-          {page==="results"&&(
+          {page === "results" && (
             <>
-              <div style={{fontSize:11,color:COLORS.text2,marginBottom:12}}>{resGames.length} results</div>
-              <div className="cards-grid" style={{display:"grid",gap:10}}>
-                {resGames.map((g,i)=><ResultCard key={g.id} game={g} delay={i*0.04}/>)}
-                {resGames.length===0&&<EmptyState msg="No results for this filter."/>}
+              <div style={{fontSize:11, color:COLORS.text2, marginBottom:12}}>{resGames.length} results</div>
+              <div className="cards-grid" style={{display:"grid", gap:10}}>
+                {resGames.map((g, i) => <ResultCard key={g.id} game={g} delay={i*0.04}/>)}
+                {resGames.length === 0 && <EmptyState msg="No results for this filter."/>}
               </div>
             </>
           )}
 
           {/* ─── MY BETS PAGE ──────────────────────────── */}
-          {page==="mybets"&&(
+          {page === "mybets" && (
             <>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:16}}>
+              <div style={{display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10, marginBottom:16}}>
                 {[
-                  {label:"Win Rate",    val:winRate!==null?`${winRate}%`:"—", col:COLORS.green},
-                  {label:"Total Bets",  val:history.length,                    col:COLORS.blue},
-                  {label:"Wagered",     val:`€${totalWagered.toFixed(2)}`,     col:COLORS.text0},
-                  {label:"Returns",     val:`€${totalReturns.toFixed(2)}`,     col:totalReturns>=totalWagered?COLORS.green:COLORS.red},
-                ].map(s=>(
-                  <div key={s.label} style={{background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:13,padding:"14px 16px"}}>
-                    <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.08em",marginBottom:6,fontWeight:700}}>{s.label.toUpperCase()}</div>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:s.col}}>{s.val}</div>
+                  {label:"Win Rate",   val:winRate!==null?`${winRate}%`:"—",  col:COLORS.green},
+                  {label:"Total Bets", val:history.length,                     col:COLORS.blue},
+                  {label:"Wagered",    val:`€${totalWagered.toFixed(2)}`,      col:COLORS.text0},
+                  {label:"Returns",    val:`€${totalReturns.toFixed(2)}`,      col:totalReturns>=totalWagered?COLORS.green:COLORS.red},
+                ].map(s => (
+                  <div key={s.label} style={{background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:13, padding:"14px 16px"}}>
+                    <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.08em", marginBottom:6, fontWeight:700}}>{s.label.toUpperCase()}</div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:22, color:s.col}}>{s.val}</div>
                   </div>
                 ))}
               </div>
-              {settled.length===0
-                ?<EmptyState msg="No bets yet. Browse matches and build your slip!"/>
-                :settled.map(e=><HistoryCard key={e.id} entry={e} open={histExp===e.id} onToggle={()=>setHistExp(histExp===e.id?null:e.id)}/>)
+              {settled.length === 0
+                ? <EmptyState msg="No bets yet. Browse matches and build your slip!"/>
+                : settled.map(e => <HistoryCard key={e.id} entry={e} open={histExp===e.id} onToggle={() => setHistExp(histExp===e.id ? null : e.id)}/>)
               }
             </>
           )}
         </div>
       </div>
 
-      {/* ═══════════════════ BOTTOM NAV (mobile/tablet) ══════════ */}
+      {/* ═══════════════════ BOTTOM NAV ══════════════════════════ */}
       <nav className="bottom-nav" style={{
-        position:"fixed",bottom:0,left:0,right:0,zIndex:70,
-        background:"rgba(7,8,16,0.98)",backdropFilter:"blur(20px)",
-        borderTop:`1px solid ${COLORS.border}`,height:60,display:"none"
+        position:"fixed", bottom:0, left:0, right:0, zIndex:70,
+        background:"rgba(7,8,16,0.98)", backdropFilter:"blur(20px)",
+        borderTop:`1px solid ${COLORS.border}`, height:60, display:"none"
       }}>
-        {[{id:"home",icon:"🏠",label:"Home"},{id:"matches",icon:"⚽",label:"Matches"},{id:"results",icon:"📊",label:"Results"},{id:"mybets",icon:"🎫",label:"My Bets",badge:history.length}].map(n=>(
-          <button key={n.id} className="btn" onClick={()=>setPage(n.id)} style={{
-            flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-            gap:2,position:"relative",color:page===n.id?COLORS.green:COLORS.text2}}>
-            <span style={{fontSize:19,lineHeight:1}}>{n.icon}</span>
-            <span style={{fontSize:9,fontWeight:page===n.id?800:500,letterSpacing:"0.05em"}}>{n.label.toUpperCase()}</span>
-            {n.badge>0&&<span style={{position:"absolute",top:4,right:"calc(50% - 16px)",background:COLORS.red,color:"#fff",borderRadius:999,fontSize:9,fontWeight:800,minWidth:15,height:15,lineHeight:"15px",textAlign:"center",padding:"0 3px"}}>{n.badge}</span>}
-            {page===n.id&&<span style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2.5,background:COLORS.green,borderRadius:2}}/>}
+        {[{id:"home",icon:"🏠",label:"Home"},{id:"matches",icon:"⚽",label:"Matches"},{id:"results",icon:"📊",label:"Results"},{id:"mybets",icon:"🎫",label:"My Bets",badge:history.length}].map(n => (
+          <button key={n.id} className="btn" onClick={() => setPage(n.id)} style={{
+            flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+            gap:2, position:"relative", color:page===n.id?COLORS.green:COLORS.text2}}>
+            <span style={{fontSize:19, lineHeight:1}}>{n.icon}</span>
+            <span style={{fontSize:9, fontWeight:page===n.id?800:500, letterSpacing:"0.05em"}}>{n.label.toUpperCase()}</span>
+            {n.badge>0 && <span style={{position:"absolute", top:4, right:"calc(50% - 16px)", background:COLORS.red, color:"#fff", borderRadius:999, fontSize:9, fontWeight:800, minWidth:15, height:15, lineHeight:"15px", textAlign:"center", padding:"0 3px"}}>{n.badge}</span>}
+            {page===n.id && <span style={{position:"absolute", bottom:0, left:"20%", right:"20%", height:2.5, background:COLORS.green, borderRadius:2}}/>}
           </button>
         ))}
       </nav>
 
       {/* ═══════════════════ SLIP PANEL ══════════════════════════ */}
-      {slipOpen&&<div onClick={()=>setSlipOpen(false)} style={{position:"fixed",inset:0,zIndex:148,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(5px)"}}/>}
+      {slipOpen && <div onClick={() => setSlipOpen(false)} style={{position:"fixed", inset:0, zIndex:148, background:"rgba(0,0,0,0.75)", backdropFilter:"blur(5px)"}}/>}
       <div className="slip-panel" style={{
-        position:"fixed",right:0,top:0,bottom:0,zIndex:149,
-        width:340,background:COLORS.bg1,borderLeft:`1px solid ${COLORS.border}`,
-        display:"flex",flexDirection:"column",
+        position:"fixed", right:0, top:0, bottom:0, zIndex:149,
+        width:340, background:COLORS.bg1, borderLeft:`1px solid ${COLORS.border}`,
+        display:"flex", flexDirection:"column",
         transform:slipOpen?"translateX(0)":"translateX(100%)",
         transition:"transform .3s cubic-bezier(0.4,0,0.2,1)"
       }}>
-        {/* Slip header */}
-        <div style={{padding:"0 16px",height:56,borderBottom:`1px solid ${COLORS.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:18,letterSpacing:"0.04em"}}>BET SLIP</span>
-            {slip.length>0&&<span style={{background:COLORS.green,color:COLORS.bg0,borderRadius:999,padding:"0 9px",fontSize:10,fontWeight:800,lineHeight:"18px"}}>{slip.length}</span>}
+        <div style={{padding:"0 16px", height:56, borderBottom:`1px solid ${COLORS.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0}}>
+          <div style={{display:"flex", alignItems:"center", gap:8}}>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18, letterSpacing:"0.04em"}}>BET SLIP</span>
+            {slip.length>0 && <span style={{background:COLORS.green, color:COLORS.bg0, borderRadius:999, padding:"0 9px", fontSize:10, fontWeight:800, lineHeight:"18px"}}>{slip.length}</span>}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            {slip.length>0&&<button onClick={()=>setSlip([])} style={{fontSize:11,color:COLORS.red,fontWeight:800,letterSpacing:"0.06em"}}>CLEAR</button>}
-            <button onClick={()=>setSlipOpen(false)} style={{fontSize:24,color:COLORS.text2,lineHeight:1}}>×</button>
+          <div style={{display:"flex", alignItems:"center", gap:12}}>
+            {slip.length>0 && <button onClick={() => setSlip([])} style={{fontSize:11, color:COLORS.red, fontWeight:800, letterSpacing:"0.06em"}}>CLEAR</button>}
+            <button onClick={() => setSlipOpen(false)} style={{fontSize:24, color:COLORS.text2, lineHeight:1}}>×</button>
           </div>
         </div>
 
-        {/* Slip items */}
-        <div style={{flex:1,overflowY:"auto",padding:"10px 14px"}}>
-          {slip.length===0?(
-            <div style={{textAlign:"center",padding:"50px 20px",color:COLORS.text2}}>
-              <div style={{fontSize:44,marginBottom:14,opacity:.15}}>🎫</div>
-              <p style={{fontSize:13,lineHeight:1.8}}>Tap any odds button on a match to add selections</p>
+        <div style={{flex:1, overflowY:"auto", padding:"10px 14px"}}>
+          {slip.length === 0 ? (
+            <div style={{textAlign:"center", padding:"50px 20px", color:COLORS.text2}}>
+              <div style={{fontSize:44, marginBottom:14, opacity:.15}}>🎫</div>
+              <p style={{fontSize:13, lineHeight:1.8}}>Tap any odds button on a match to add selections</p>
             </div>
-          ):slip.map(b=>{
-            const ret = ((parseFloat(b.stake)||0)*b.odds).toFixed(2);
-            return(
-              <div key={b.id} className="fadeUp" style={{background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                  <div style={{flex:1,paddingRight:8}}>
-                    <div style={{fontSize:10,color:COLORS.text2,marginBottom:2}}>{b.flag} {b.league}</div>
-                    <div style={{fontWeight:700,fontSize:13,lineHeight:1.3}}>{b.home} vs {b.away}</div>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5}}>
-                      <span style={{fontSize:11,color:pickColor(b.pick),fontWeight:700}}>{pickName(b.pick)}</span>
-                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,color:COLORS.gold,fontWeight:800,background:COLORS.goldFaint,border:`1px solid ${COLORS.goldBorder}`,borderRadius:4,padding:"1px 7px"}}>{b.odds.toFixed(2)}</span>
+          ) : slip.map(b => {
+            const ret = ((parseFloat(b.stake)||0) * b.odds).toFixed(2);
+            return (
+              <div key={b.id} className="fadeUp" style={{background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:"12px 14px", marginBottom:8}}>
+                <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8}}>
+                  <div style={{flex:1, paddingRight:8}}>
+                    <div style={{fontSize:10, color:COLORS.text2, marginBottom:2}}>{b.flag} {b.league}</div>
+                    <div style={{fontWeight:700, fontSize:13, lineHeight:1.3}}>{b.home} vs {b.away}</div>
+                    <div style={{display:"flex", alignItems:"center", gap:6, marginTop:5}}>
+                      <span style={{fontSize:11, color:pickColor(b.pick), fontWeight:700}}>{pickName(b.pick)}</span>
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:4, padding:"1px 7px"}}>{b.odds.toFixed(2)}</span>
                     </div>
                   </div>
-                  <button onClick={()=>removeSlip(b.id)} style={{color:COLORS.text2,fontSize:20,lineHeight:1,flexShrink:0}}>×</button>
+                  <button onClick={() => removeSlip(b.id)} style={{color:COLORS.text2, fontSize:20, lineHeight:1, flexShrink:0}}>×</button>
                 </div>
-                <div style={{fontSize:9,color:COLORS.text2,marginBottom:5,fontWeight:700,letterSpacing:"0.08em"}}>STAKE (€)</div>
-                <div style={{display:"flex",gap:6,marginBottom:6}}>
-                  <input type="number" min=".5" step=".5" value={b.stake} onChange={e=>updateStake(b.id,e.target.value)}
-                    style={{flex:1,background:COLORS.bg0,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:"8px 10px",color:COLORS.text0,fontSize:14,outline:"none"}}/>
-                  <div style={{background:COLORS.greenFaint,border:`1px solid ${COLORS.greenBorder}`,borderRadius:8,padding:"8px 10px",fontSize:13,color:COLORS.green,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,flexShrink:0}}>€{ret}</div>
+                <div style={{fontSize:9, color:COLORS.text2, marginBottom:5, fontWeight:700, letterSpacing:"0.08em"}}>STAKE (€)</div>
+                <div style={{display:"flex", gap:6, marginBottom:6}}>
+                  <input type="number" min=".5" step=".5" value={b.stake} onChange={e => updateStake(b.id, e.target.value)}
+                    style={{flex:1, background:COLORS.bg0, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"8px 10px", color:COLORS.text0, fontSize:14, outline:"none"}}/>
+                  <div style={{background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:8, padding:"8px 10px", fontSize:13, color:COLORS.green, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, flexShrink:0}}>€{ret}</div>
                 </div>
-                <div style={{display:"flex",gap:4}}>
-                  {[5,10,25,50].map(a=>(
-                    <button key={a} className="btn" onClick={()=>updateStake(b.id,String(a))} style={{flex:1,padding:"5px 0",borderRadius:7,fontSize:11,fontWeight:700,
-                      background:b.stake===String(a)?COLORS.greenFaint:COLORS.bg3,border:`1px solid ${b.stake===String(a)?COLORS.greenBorder:COLORS.border}`,
+                <div style={{display:"flex", gap:4}}>
+                  {[5, 10, 25, 50].map(a => (
+                    <button key={a} className="btn" onClick={() => updateStake(b.id, String(a))} style={{flex:1, padding:"5px 0", borderRadius:7, fontSize:11, fontWeight:700,
+                      background:b.stake===String(a)?COLORS.greenFaint:COLORS.bg3, border:`1px solid ${b.stake===String(a)?COLORS.greenBorder:COLORS.border}`,
                       color:b.stake===String(a)?COLORS.green:COLORS.text2}}>€{a}</button>
                   ))}
                 </div>
@@ -915,39 +924,38 @@ export default function App() {
           })}
         </div>
 
-        {/* Slip footer */}
-        {slip.length>0&&(
-          <div style={{borderTop:`1px solid ${COLORS.border}`,padding:"14px 16px",flexShrink:0}}>
-            <div style={{background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:11,padding:"12px 14px",marginBottom:12}}>
-              {slip.length>1&&(
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                  <span style={{fontSize:12,color:COLORS.text1}}>Accumulator odds</span>
-                  <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:14,color:COLORS.gold,fontWeight:800}}>{accumOdds.toFixed(2)}×</span>
+        {slip.length > 0 && (
+          <div style={{borderTop:`1px solid ${COLORS.border}`, padding:"14px 16px", flexShrink:0}}>
+            <div style={{background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:11, padding:"12px 14px", marginBottom:12}}>
+              {slip.length > 1 && (
+                <div style={{display:"flex", justifyContent:"space-between", marginBottom:6}}>
+                  <span style={{fontSize:12, color:COLORS.text1}}>Accumulator odds</span>
+                  <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, color:COLORS.gold, fontWeight:800}}>{accumOdds.toFixed(2)}×</span>
                 </div>
               )}
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                <span style={{fontSize:12,color:COLORS.text1}}>Total stake</span>
-                <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13}}>{`€${totalStake.toFixed(2)}`}</span>
+              <div style={{display:"flex", justifyContent:"space-between", marginBottom:6}}>
+                <span style={{fontSize:12, color:COLORS.text1}}>Total stake</span>
+                <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:13}}>€{totalStake.toFixed(2)}</span>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                <span style={{fontSize:12,color:COLORS.text1}}>Balance after</span>
-                <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,color:totalStake>balance?COLORS.red:COLORS.text1}}>€{(balance-totalStake).toFixed(2)}</span>
+              <div style={{display:"flex", justifyContent:"space-between", marginBottom:6}}>
+                <span style={{fontSize:12, color:COLORS.text1}}>Balance after</span>
+                <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, color:totalStake>balance?COLORS.red:COLORS.text1}}>€{(balance-totalStake).toFixed(2)}</span>
               </div>
-              <div style={{borderTop:`1px solid ${COLORS.border}`,paddingTop:8,display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:14,fontWeight:700}}>Potential return</span>
-                <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:900,color:COLORS.green}}>€{potReturn.toFixed(2)}</span>
+              <div style={{borderTop:`1px solid ${COLORS.border}`, paddingTop:8, display:"flex", justifyContent:"space-between"}}>
+                <span style={{fontSize:14, fontWeight:700}}>Potential return</span>
+                <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:18, fontWeight:900, color:COLORS.green}}>€{potReturn.toFixed(2)}</span>
               </div>
             </div>
-            {totalStake>balance&&<div style={{textAlign:"center",color:COLORS.red,fontSize:11,fontWeight:700,marginBottom:8}}>⚠ Stake exceeds available balance</div>}
-            <button className="btn" onClick={placeBets} disabled={placing||totalStake>balance||totalStake<=0}
-              style={{width:"100%",padding:"14px",borderRadius:11,
+            {totalStake > balance && <div style={{textAlign:"center", color:COLORS.red, fontSize:11, fontWeight:700, marginBottom:8}}>⚠ Stake exceeds available balance</div>}
+            <button className="btn" onClick={placeBets} disabled={placing || totalStake>balance || totalStake<=0}
+              style={{width:"100%", padding:"14px", borderRadius:11,
                 background:placing||totalStake>balance?"#1a2a18":`linear-gradient(90deg,${COLORS.green},${COLORS.greenD})`,
                 color:placing||totalStake>balance?COLORS.text2:COLORS.bg0,
-                fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:16,letterSpacing:"0.06em",
-                display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-              {placing?<><span className="spin">◌</span> Placing bets...</>:`PLACE ${slip.length} BET${slip.length>1?"S":""}`}
+                fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:16, letterSpacing:"0.06em",
+                display:"flex", alignItems:"center", justifyContent:"center", gap:8}}>
+              {placing ? <><span className="spin">◌</span> Placing bets...</> : `PLACE ${slip.length} BET${slip.length>1?"S":""}`}
             </button>
-            <p style={{fontSize:10,color:COLORS.text2,textAlign:"center",marginTop:8,lineHeight:1.6}}>18+ · Bet Responsibly · AI predictions only</p>
+            <p style={{fontSize:10, color:COLORS.text2, textAlign:"center", marginTop:8, lineHeight:1.6}}>18+ · Bet Responsibly · AI predictions only</p>
           </div>
         )}
       </div>
@@ -955,81 +963,77 @@ export default function App() {
   );
 }
 
-/* ── COMPACT ROW (home preview) ──────────────────────────────── */
-function CompactRow({game,inSlip,onAdd}) {
+/* ── COMPACT ROW ─────────────────────────────────────────────── */
+function CompactRow({game, inSlip, onAdd}) {
   const cm = confMeta(game.conf);
-  const ai = oddsFor(game,game.pick);
+  const ai = oddsFor(game, game.pick);
   return (
-    <div className="card-hover fadeUp" style={{background:COLORS.bg2,border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`,borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:10,color:COLORS.text2,marginBottom:4,display:"flex",alignItems:"center",gap:5}}>
+    <div className="card-hover fadeUp" style={{background:COLORS.bg2, border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`, borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", gap:10}}>
+      <div style={{flex:1, minWidth:0}}>
+        <div style={{fontSize:10, color:COLORS.text2, marginBottom:4, display:"flex", alignItems:"center", gap:5}}>
           <span>{game.flag}</span><span>{game.league}</span><span>·</span><span>{game.display}</span>
         </div>
-        <div style={{fontWeight:700,fontSize:13}}>{game.home} <span style={{color:COLORS.text2,fontWeight:400,fontSize:11}}>vs</span> {game.away}</div>
-        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-          <span style={{fontSize:10,color:pickColor(game.pick),fontWeight:700}}>{pickName(game.pick)}</span>
-          <span style={{fontSize:9,color:cm.c,background:cm.bg,border:`1px solid ${cm.bc}`,borderRadius:4,padding:"1px 6px",fontWeight:700}}>{cm.label} {game.conf}%</span>
+        <div style={{fontWeight:700, fontSize:13}}>{game.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:11}}>vs</span> {game.away}</div>
+        <div style={{display:"flex", alignItems:"center", gap:6, marginTop:4}}>
+          <span style={{fontSize:10, color:pickColor(game.pick), fontWeight:700}}>{pickName(game.pick)}</span>
+          <span style={{fontSize:9, color:cm.c, background:cm.bg, border:`1px solid ${cm.bc}`, borderRadius:4, padding:"1px 6px", fontWeight:700}}>{cm.label} {game.conf}%</span>
         </div>
       </div>
-      <button className="btn" onClick={()=>onAdd(game.pick)}
-        style={{display:"flex",alignItems:"center",gap:5,padding:"8px 12px",borderRadius:9,flexShrink:0,
-          background:inSlip?COLORS.greenFaint:COLORS.bg3,border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`,
-          color:inSlip?COLORS.green:COLORS.text1,fontSize:11,fontWeight:700}}>
-        {inSlip?"✓ ADDED":`+ ${ai.toFixed(2)}`}
+      <button className="btn" onClick={() => onAdd(game.pick)}
+        style={{display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:9, flexShrink:0,
+          background:inSlip?COLORS.greenFaint:COLORS.bg3, border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`,
+          color:inSlip?COLORS.green:COLORS.text1, fontSize:11, fontWeight:700}}>
+        {inSlip ? "✓ ADDED" : `+ ${ai.toFixed(2)}`}
       </button>
     </div>
   );
 }
 
 /* ── FULL MATCH CARD ─────────────────────────────────────────── */
-function MatchCard({game,inSlip,expanded,onExpand,onAdd,delay=0}) {
+function MatchCard({game, inSlip, expanded, onExpand, onAdd, delay=0}) {
   const cm = confMeta(game.conf);
-  const tonight = new Date(game.kick).toDateString()===new Date().toDateString();
+  const tonight = new Date(game.kick).toDateString() === new Date().toDateString();
   return (
-    <div className="card-hover fadeUp" style={{background:COLORS.bg1,border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`,borderRadius:15,overflow:"hidden",animationDelay:`${delay}s`,animationFillMode:"both",boxShadow:inSlip?"0 0 0 1px rgba(0,230,118,0.1)":"none"}}>
+    <div className="card-hover fadeUp" style={{background:COLORS.bg1, border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`, borderRadius:15, overflow:"hidden", animationDelay:`${delay}s`, animationFillMode:"both", boxShadow:inSlip?"0 0 0 1px rgba(0,230,118,0.1)":"none"}}>
       <div style={{padding:"14px 16px 0"}}>
-        {/* Header */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
+          <div style={{display:"flex", alignItems:"center", gap:6}}>
             <span style={{fontSize:14}}>{game.flag}</span>
             <div>
-              <div style={{fontSize:10,color:COLORS.text1,fontWeight:600}}>{game.league}</div>
-              <div style={{fontSize:9,color:COLORS.text2}}>{game.round}</div>
+              <div style={{fontSize:10, color:COLORS.text1, fontWeight:600}}>{game.league}</div>
+              <div style={{fontSize:9, color:COLORS.text2}}>{game.round}</div>
             </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:5}}>
-            {tonight&&<span className="pulse" style={{fontSize:9,color:COLORS.red,background:COLORS.redFaint,border:"1px solid rgba(255,82,82,0.25)",borderRadius:4,padding:"2px 6px",fontWeight:800}}>TONIGHT</span>}
-            <span style={{fontSize:9,color:cm.c,background:cm.bg,border:`1px solid ${cm.bc}`,borderRadius:5,padding:"2px 7px",fontWeight:800}}>{cm.label} {game.conf}%</span>
+          <div style={{display:"flex", alignItems:"center", gap:5}}>
+            {tonight && <span className="pulse" style={{fontSize:9, color:COLORS.red, background:COLORS.redFaint, border:"1px solid rgba(255,82,82,0.25)", borderRadius:4, padding:"2px 6px", fontWeight:800}}>TONIGHT</span>}
+            <span style={{fontSize:9, color:cm.c, background:cm.bg, border:`1px solid ${cm.bc}`, borderRadius:5, padding:"2px 7px", fontWeight:800}}>{cm.label} {game.conf}%</span>
           </div>
         </div>
 
-        {/* Kickoff */}
-        <div style={{textAlign:"center",fontSize:11,color:COLORS.text2,background:COLORS.bg2,borderRadius:7,padding:"4px",marginBottom:10,fontFamily:"monospace",letterSpacing:"0.04em"}}>{game.display}</div>
+        <div style={{textAlign:"center", fontSize:11, color:COLORS.text2, background:COLORS.bg2, borderRadius:7, padding:"4px", marginBottom:10, fontFamily:"monospace", letterSpacing:"0.04em"}}>{game.display}</div>
 
-        {/* Teams */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 44px 1fr",gap:6,alignItems:"center",marginBottom:10}}>
+        <div style={{display:"grid", gridTemplateColumns:"1fr 44px 1fr", gap:6, alignItems:"center", marginBottom:10}}>
           <div style={{textAlign:"right"}}>
-            <div style={{fontWeight:800,fontSize:14,lineHeight:1.2}}>{game.home}</div>
-            <div style={{fontSize:9,color:COLORS.text2,marginTop:2,letterSpacing:"0.06em"}}>HOME</div>
+            <div style={{fontWeight:800, fontSize:14, lineHeight:1.2}}>{game.home}</div>
+            <div style={{fontSize:9, color:COLORS.text2, marginTop:2, letterSpacing:"0.06em"}}>HOME</div>
           </div>
-          <div style={{textAlign:"center",background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:9,padding:"7px 0"}}>
-            <div style={{fontSize:10,color:COLORS.text2,fontWeight:700}}>VS</div>
+          <div style={{textAlign:"center", background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:9, padding:"7px 0"}}>
+            <div style={{fontSize:10, color:COLORS.text2, fontWeight:700}}>VS</div>
           </div>
           <div>
-            <div style={{fontWeight:600,fontSize:14,lineHeight:1.2,color:COLORS.text1}}>{game.away}</div>
-            <div style={{fontSize:9,color:COLORS.text2,marginTop:2,letterSpacing:"0.06em"}}>AWAY</div>
+            <div style={{fontWeight:600, fontSize:14, lineHeight:1.2, color:COLORS.text1}}>{game.away}</div>
+            <div style={{fontSize:9, color:COLORS.text2, marginTop:2, letterSpacing:"0.06em"}}>AWAY</div>
           </div>
         </div>
 
-        {/* Prob bar */}
-        {game.prob&&(
+        {game.prob && (
           <div style={{marginBottom:10}}>
-            <div style={{height:5,borderRadius:99,display:"flex",overflow:"hidden",gap:1.5}}>
-              <div style={{flex:game.prob.h,background:COLORS.blue,borderRadius:"99px 0 0 99px"}}/>
-              <div style={{flex:game.prob.d,background:COLORS.gold}}/>
-              <div style={{flex:game.prob.a,background:COLORS.purple,borderRadius:"0 99px 99px 0"}}/>
+            <div style={{height:5, borderRadius:99, display:"flex", overflow:"hidden", gap:1.5}}>
+              <div style={{flex:game.prob.h, background:COLORS.blue, borderRadius:"99px 0 0 99px"}}/>
+              <div style={{flex:game.prob.d, background:COLORS.gold}}/>
+              <div style={{flex:game.prob.a, background:COLORS.purple, borderRadius:"0 99px 99px 0"}}/>
             </div>
-            <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:9,fontWeight:700}}>
+            <div style={{display:"flex", justifyContent:"space-between", marginTop:3, fontSize:9, fontWeight:700}}>
               <span style={{color:COLORS.blue}}>{game.prob.h}%</span>
               <span style={{color:COLORS.gold}}>Draw {game.prob.d}%</span>
               <span style={{color:COLORS.purple}}>{game.prob.a}%</span>
@@ -1037,81 +1041,76 @@ function MatchCard({game,inSlip,expanded,onExpand,onAdd,delay=0}) {
           </div>
         )}
 
-        {/* Odds */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
+        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:10}}>
           {[
-            {label:"1",sub:"Home",pick:"home_win",val:game.odds.h,col:COLORS.blue},
-            {label:"X",sub:"Draw",pick:"draw",    val:game.odds.d,col:COLORS.gold},
-            {label:"2",sub:"Away",pick:"away_win", val:game.odds.a,col:COLORS.purple},
-          ].map(o=>{
-            const isAI = game.pick===o.pick;
-            return(
-              <button key={o.label} className="btn odds-hover" onClick={()=>onAdd(o.pick)}
-                style={{padding:"9px 5px",borderRadius:10,textAlign:"center",
+            {label:"1", sub:"Home", pick:"home_win", val:game.odds.h, col:COLORS.blue},
+            {label:"X", sub:"Draw", pick:"draw",     val:game.odds.d, col:COLORS.gold},
+            {label:"2", sub:"Away", pick:"away_win",  val:game.odds.a, col:COLORS.purple},
+          ].map(o => {
+            const isAI = game.pick === o.pick;
+            return (
+              <button key={o.label} className="btn odds-hover" onClick={() => onAdd(o.pick)}
+                style={{padding:"9px 5px", borderRadius:10, textAlign:"center",
                   border:`1px solid ${isAI?`${o.col}55`:COLORS.border}`,
-                  background:isAI?`${o.col}0f`:COLORS.bg2,transition:"all .15s"}}>
-                <div style={{fontSize:9,color:isAI?o.col:COLORS.text2,fontWeight:800,letterSpacing:"0.06em",marginBottom:2}}>{o.label}</div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:17,color:isAI?o.col:COLORS.text0}}>{o.val.toFixed(2)}</div>
-                {isAI&&<div style={{fontSize:8,color:o.col,fontWeight:800,marginTop:2}}>AI PICK ✓</div>}
+                  background:isAI?`${o.col}0f`:COLORS.bg2, transition:"all .15s"}}>
+                <div style={{fontSize:9, color:isAI?o.col:COLORS.text2, fontWeight:800, letterSpacing:"0.06em", marginBottom:2}}>{o.label}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:17, color:isAI?o.col:COLORS.text0}}>{o.val.toFixed(2)}</div>
+                {isAI && <div style={{fontSize:8, color:o.col, fontWeight:800, marginTop:2}}>AI PICK ✓</div>}
               </button>
             );
           })}
         </div>
 
-        {/* AI badge */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:COLORS.greenFaint,border:`1px solid ${COLORS.greenBorder}`,borderRadius:9,padding:"8px 12px",marginBottom:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:7}}>
-            <span style={{width:7,height:7,borderRadius:"50%",background:pickColor(game.pick),flexShrink:0}}/>
-            <span style={{fontSize:12,fontWeight:700,color:COLORS.green}}>AI: {pickName(game.pick)}</span>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:9, padding:"8px 12px", marginBottom:10}}>
+          <div style={{display:"flex", alignItems:"center", gap:7}}>
+            <span style={{width:7, height:7, borderRadius:"50%", background:pickColor(game.pick), flexShrink:0}}/>
+            <span style={{fontSize:12, fontWeight:700, color:COLORS.green}}>AI: {pickName(game.pick)}</span>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:14,color:COLORS.gold,fontWeight:800,background:COLORS.goldFaint,border:`1px solid ${COLORS.goldBorder}`,borderRadius:5,padding:"1px 8px"}}>{oddsFor(game,game.pick).toFixed(2)}</span>
-            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,color:cm.c,fontWeight:800}}>{game.conf}%</span>
+          <div style={{display:"flex", alignItems:"center", gap:6}}>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"1px 8px"}}>{oddsFor(game, game.pick).toFixed(2)}</span>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, color:cm.c, fontWeight:800}}>{game.conf}%</span>
           </div>
         </div>
 
-        {/* Conf bar */}
         <div style={{marginBottom:10}}>
-          <div style={{height:3,background:COLORS.bg3,borderRadius:99,overflow:"hidden"}}>
-            <div style={{width:`${game.conf}%`,height:"100%",background:cm.c,borderRadius:99,transition:"width .5s ease"}}/>
+          <div style={{height:3, background:COLORS.bg3, borderRadius:99, overflow:"hidden"}}>
+            <div style={{width:`${game.conf}%`, height:"100%", background:cm.c, borderRadius:99, transition:"width .5s ease"}}/>
           </div>
         </div>
       </div>
 
-      {/* Action row */}
-      <div style={{display:"flex",borderTop:`1px solid ${COLORS.border}`}}>
-        <button className="btn" onClick={()=>onAdd(game.pick)}
-          style={{flex:1,padding:"11px 14px",background:inSlip?COLORS.greenFaint:"transparent",borderRight:`1px solid ${COLORS.border}`,fontSize:11,fontWeight:800,letterSpacing:"0.07em",color:inSlip?COLORS.green:COLORS.text2}}>
-          {inSlip?"✓ IN SLIP":"+ ADD TO SLIP"}
+      <div style={{display:"flex", borderTop:`1px solid ${COLORS.border}`}}>
+        <button className="btn" onClick={() => onAdd(game.pick)}
+          style={{flex:1, padding:"11px 14px", background:inSlip?COLORS.greenFaint:"transparent", borderRight:`1px solid ${COLORS.border}`, fontSize:11, fontWeight:800, letterSpacing:"0.07em", color:inSlip?COLORS.green:COLORS.text2}}>
+          {inSlip ? "✓ IN SLIP" : "+ ADD TO SLIP"}
         </button>
         <button className="btn" onClick={onExpand}
-          style={{padding:"11px 14px",fontSize:10,color:COLORS.text2,fontWeight:700,letterSpacing:"0.06em",display:"flex",alignItems:"center",gap:4}}>
-          {expanded?"▲":"▼"} ANALYSIS
+          style={{padding:"11px 14px", fontSize:10, color:COLORS.text2, fontWeight:700, letterSpacing:"0.06em", display:"flex", alignItems:"center", gap:4}}>
+          {expanded ? "▲" : "▼"} ANALYSIS
         </button>
       </div>
 
-      {/* Analysis */}
-      {expanded&&(
-        <div style={{padding:"12px 16px",borderTop:`1px solid ${COLORS.border}`,background:COLORS.bg0}}>
-          {game.tips?.map((t,i)=>(
-            <div key={i} style={{display:"flex",gap:7,fontSize:11,color:COLORS.text1,marginBottom:7,lineHeight:1.65}}>
-              <span style={{color:COLORS.green,flexShrink:0,marginTop:1}}>›</span><span>{t}</span>
+      {expanded && (
+        <div style={{padding:"12px 16px", borderTop:`1px solid ${COLORS.border}`, background:COLORS.bg0}}>
+          {game.tips?.map((t, i) => (
+            <div key={i} style={{display:"flex", gap:7, fontSize:11, color:COLORS.text1, marginBottom:7, lineHeight:1.65}}>
+              <span style={{color:COLORS.green, flexShrink:0, marginTop:1}}>›</span><span>{t}</span>
             </div>
           ))}
-          {game.h2h&&(
-            <div style={{marginTop:8,padding:"8px 10px",background:COLORS.bg2,borderRadius:8,fontSize:11,color:COLORS.text2}}>
-              <span style={{color:COLORS.gold,fontWeight:700}}>H2H: </span>{game.h2h}
+          {game.h2h && (
+            <div style={{marginTop:8, padding:"8px 10px", background:COLORS.bg2, borderRadius:8, fontSize:11, color:COLORS.text2}}>
+              <span style={{color:COLORS.gold, fontWeight:700}}>H2H: </span>{game.h2h}
             </div>
           )}
-          {game.form&&(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
-              {[{label:`${game.home} Form`,v:game.form.h},{label:`${game.away} Form`,v:game.form.a}].map(f=>(
-                <div key={f.label} style={{background:COLORS.bg2,borderRadius:9,padding:"9px 10px"}}>
-                  <div style={{fontSize:9,color:COLORS.text2,marginBottom:5,fontWeight:700,letterSpacing:"0.06em"}}>{f.label.toUpperCase()}</div>
-                  <div style={{display:"flex",gap:3}}>
-                    {f.v.split("").map((c,i)=>{
-                      const col=c==="W"?COLORS.green:c==="D"?COLORS.gold:COLORS.red;
-                      return <span key={i} style={{width:19,height:19,borderRadius:5,background:`${col}18`,color:col,fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{c}</span>;
+          {game.form && (
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:10}}>
+              {[{label:`${game.home} Form`, v:game.form.h}, {label:`${game.away} Form`, v:game.form.a}].map(f => (
+                <div key={f.label} style={{background:COLORS.bg2, borderRadius:9, padding:"9px 10px"}}>
+                  <div style={{fontSize:9, color:COLORS.text2, marginBottom:5, fontWeight:700, letterSpacing:"0.06em"}}>{f.label.toUpperCase()}</div>
+                  <div style={{display:"flex", gap:3}}>
+                    {f.v.split("").map((c, i) => {
+                      const col = c==="W"?COLORS.green : c==="D"?COLORS.gold : COLORS.red;
+                      return <span key={i} style={{width:19, height:19, borderRadius:5, background:`${col}18`, color:col, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center"}}>{c}</span>;
                     })}
                   </div>
                 </div>
@@ -1125,75 +1124,79 @@ function MatchCard({game,inSlip,expanded,onExpand,onAdd,delay=0}) {
 }
 
 /* ── RESULT CARD ─────────────────────────────────────────────── */
-function ResultCard({game,delay=0}) {
-  const hW=game.score.h>game.score.a, aW=game.score.a>game.score.h, dr=game.score.h===game.score.a;
-  const correct = didWin(game,game.pick);
+function ResultCard({game, delay=0}) {
+  const hW = game.score.h > game.score.a;
+  const aW = game.score.a > game.score.h;
+  const dr = game.score.h === game.score.a;
+  const correct = didWin(game, game.pick);
   return (
-    <div className="card-hover fadeUp" style={{background:COLORS.bg1,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:"14px 16px",animationDelay:`${delay}s`,animationFillMode:"both"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <span style={{fontSize:10,color:COLORS.text2,display:"flex",alignItems:"center",gap:5}}><span>{game.flag}</span><span>{game.league}</span><span>·</span><span>{game.round}</span></span>
-        <span style={{fontSize:10,color:COLORS.text2,fontFamily:"monospace"}}>{game.display}</span>
+    <div className="card-hover fadeUp" style={{background:COLORS.bg1, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:"14px 16px", animationDelay:`${delay}s`, animationFillMode:"both"}}>
+      <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
+        <span style={{fontSize:10, color:COLORS.text2, display:"flex", alignItems:"center", gap:5}}>
+          <span>{game.flag}</span><span>{game.league}</span><span>·</span><span>{game.round}</span>
+        </span>
+        <span style={{fontSize:10, color:COLORS.text2, fontFamily:"monospace"}}>{game.display}</span>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center",marginBottom:10}}>
+      <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:10, alignItems:"center", marginBottom:10}}>
         <div style={{textAlign:"right"}}>
-          <div style={{fontWeight:hW?800:500,fontSize:14,color:hW?COLORS.text0:COLORS.text2}}>{game.home}</div>
+          <div style={{fontWeight:hW?800:500, fontSize:14, color:hW?COLORS.text0:COLORS.text2}}>{game.home}</div>
         </div>
-        <div style={{textAlign:"center",background:dr?COLORS.goldFaint:COLORS.bg2,border:`1px solid ${dr?COLORS.goldBorder:COLORS.border}`,borderRadius:10,padding:"7px 14px",minWidth:68}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:20,color:dr?COLORS.gold:COLORS.text0}}>{game.score.h}–{game.score.a}</div>
-          <div style={{fontSize:8,color:COLORS.text2,letterSpacing:"0.1em",fontWeight:700}}>FT</div>
+        <div style={{textAlign:"center", background:dr?COLORS.goldFaint:COLORS.bg2, border:`1px solid ${dr?COLORS.goldBorder:COLORS.border}`, borderRadius:10, padding:"7px 14px", minWidth:68}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:20, color:dr?COLORS.gold:COLORS.text0}}>{game.score.h}–{game.score.a}</div>
+          <div style={{fontSize:8, color:COLORS.text2, letterSpacing:"0.1em", fontWeight:700}}>FT</div>
         </div>
         <div>
-          <div style={{fontWeight:aW?800:500,fontSize:14,color:aW?COLORS.text0:COLORS.text2}}>{game.away}</div>
+          <div style={{fontWeight:aW?800:500, fontSize:14, color:aW?COLORS.text0:COLORS.text2}}>{game.away}</div>
         </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",borderRadius:8,
-        background:correct?COLORS.greenFaint:COLORS.redFaint,border:`1px solid ${correct?COLORS.greenBorder:"rgba(255,82,82,0.15)"}`}}>
-        <span style={{fontSize:10,color:COLORS.text2}}>
-          AI: <span style={{color:pickColor(game.pick),fontWeight:700}}>{pickName(game.pick)}</span>
-          <span style={{color:COLORS.text2}}> @ {oddsFor(game,game.pick).toFixed(2)}</span>
+      <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 10px", borderRadius:8,
+        background:correct?COLORS.greenFaint:COLORS.redFaint, border:`1px solid ${correct?COLORS.greenBorder:"rgba(255,82,82,0.15)"}`}}>
+        <span style={{fontSize:10, color:COLORS.text2}}>
+          AI: <span style={{color:pickColor(game.pick), fontWeight:700}}>{pickName(game.pick)}</span>
+          <span style={{color:COLORS.text2}}> @ {oddsFor(game, game.pick).toFixed(2)}</span>
         </span>
-        <span style={{fontSize:11,fontWeight:800,color:correct?COLORS.green:COLORS.red}}>{correct?"✓ Correct":"✗ Wrong"}</span>
+        <span style={{fontSize:11, fontWeight:800, color:correct?COLORS.green:COLORS.red}}>{correct ? "✓ Correct" : "✗ Wrong"}</span>
       </div>
     </div>
   );
 }
 
 /* ── HISTORY CARD ────────────────────────────────────────────── */
-function HistoryCard({entry,open,onToggle}) {
-  const sc=entry.status==="won"?COLORS.green:entry.status==="lost"?COLORS.red:COLORS.gold;
+function HistoryCard({entry, open, onToggle}) {
+  const sc = entry.status==="won"?COLORS.green : entry.status==="lost"?COLORS.red : COLORS.gold;
   return (
-    <div className="fadeUp" style={{background:COLORS.bg1,border:`1px solid ${entry.status==="won"?COLORS.greenBorder:entry.status==="lost"?"rgba(255,82,82,0.2)":COLORS.border}`,borderRadius:13,overflow:"hidden",marginBottom:8}}>
-      <div onClick={onToggle} style={{padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,cursor:"pointer"}}>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:10,color:COLORS.text2,marginBottom:3}}>{new Date(entry.placedAt).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div>
-          <div style={{fontSize:13,fontWeight:700}}>
+    <div className="fadeUp" style={{background:COLORS.bg1, border:`1px solid ${entry.status==="won"?COLORS.greenBorder:entry.status==="lost"?"rgba(255,82,82,0.2)":COLORS.border}`, borderRadius:13, overflow:"hidden", marginBottom:8}}>
+      <div onClick={onToggle} style={{padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, cursor:"pointer"}}>
+        <div style={{flex:1, minWidth:0}}>
+          <div style={{fontSize:10, color:COLORS.text2, marginBottom:3}}>{new Date(entry.placedAt).toLocaleString("en-GB", {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"})}</div>
+          <div style={{fontSize:13, fontWeight:700}}>
             {entry.bets.length} selection{entry.bets.length>1?"s":""}
-            {entry.bets.length>1&&<span style={{fontSize:11,color:COLORS.text2,fontWeight:400}}> · {entry.accumOdds}×</span>}
+            {entry.bets.length>1 && <span style={{fontSize:11, color:COLORS.text2, fontWeight:400}}> · {entry.accumOdds}×</span>}
           </div>
         </div>
-        <div style={{textAlign:"right",flexShrink:0}}>
-          <div style={{fontSize:11,color:COLORS.text2}}>€{entry.totalStake.toFixed(2)} → <span style={{color:sc,fontWeight:700}}>€{entry.potReturn.toFixed(2)}</span></div>
+        <div style={{textAlign:"right", flexShrink:0}}>
+          <div style={{fontSize:11, color:COLORS.text2}}>€{entry.totalStake.toFixed(2)} → <span style={{color:sc, fontWeight:700}}>€{entry.potReturn.toFixed(2)}</span></div>
         </div>
-        <div style={{padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:800,letterSpacing:"0.06em",background:`${sc}14`,color:sc,border:`1px solid ${sc}30`,flexShrink:0}}>{entry.status.toUpperCase()}</div>
-        <span style={{fontSize:10,color:COLORS.text2,flexShrink:0}}>{open?"▲":"▼"}</span>
+        <div style={{padding:"3px 10px", borderRadius:20, fontSize:10, fontWeight:800, letterSpacing:"0.06em", background:`${sc}14`, color:sc, border:`1px solid ${sc}30`, flexShrink:0}}>{entry.status.toUpperCase()}</div>
+        <span style={{fontSize:10, color:COLORS.text2, flexShrink:0}}>{open?"▲":"▼"}</span>
       </div>
-      {open&&(
-        <div style={{borderTop:`1px solid ${COLORS.border}`,padding:"10px 16px",background:COLORS.bg0}}>
-          {entry.bets.map((b,i)=>{
-            const rc=b.result==="won"?COLORS.green:b.result==="lost"?COLORS.red:COLORS.gold;
-            return(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:8,paddingBottom:8,marginBottom:i<entry.bets.length-1?8:0,borderBottom:i<entry.bets.length-1?`1px solid ${COLORS.border}`:"none"}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:10,color:COLORS.text2}}>{b.flag} {b.league}</div>
-                  <div style={{fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.home} vs {b.away}</div>
-                  <div style={{fontSize:11,color:pickColor(b.pick),fontWeight:700,marginTop:2}}>{pickName(b.pick)}</div>
+      {open && (
+        <div style={{borderTop:`1px solid ${COLORS.border}`, padding:"10px 16px", background:COLORS.bg0}}>
+          {entry.bets.map((b, i) => {
+            const rc = b.result==="won"?COLORS.green : b.result==="lost"?COLORS.red : COLORS.gold;
+            return (
+              <div key={i} style={{display:"flex", alignItems:"center", gap:8, paddingBottom:8, marginBottom:i<entry.bets.length-1?8:0, borderBottom:i<entry.bets.length-1?`1px solid ${COLORS.border}`:"none"}}>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:10, color:COLORS.text2}}>{b.flag} {b.league}</div>
+                  <div style={{fontSize:12, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{b.home} vs {b.away}</div>
+                  <div style={{fontSize:11, color:pickColor(b.pick), fontWeight:700, marginTop:2}}>{pickName(b.pick)}</div>
                 </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,color:COLORS.gold,fontWeight:800}}>{b.odds.toFixed(2)}×</div>
-                  {b.score&&<div style={{fontSize:10,color:COLORS.text2}}>{b.score.h}–{b.score.a}</div>}
+                <div style={{textAlign:"right", flexShrink:0}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:12, color:COLORS.gold, fontWeight:800}}>{b.odds.toFixed(2)}×</div>
+                  {b.score && <div style={{fontSize:10, color:COLORS.text2}}>{b.score.h}–{b.score.a}</div>}
                 </div>
-                <div style={{width:22,textAlign:"center",flexShrink:0,fontSize:b.result==="pending"?13:16,color:rc}}>
-                  {b.result==="pending"?<span style={{animation:"pulse 1.8s ease infinite",display:"inline-block"}}>⏳</span>:b.result==="won"?"✓":"✗"}
+                <div style={{width:22, textAlign:"center", flexShrink:0, fontSize:b.result==="pending"?13:16, color:rc}}>
+                  {b.result==="pending" ? <span style={{animation:"pulse 1.8s ease infinite", display:"inline-block"}}>⏳</span> : b.result==="won" ? "✓" : "✗"}
                 </div>
               </div>
             );
@@ -1205,10 +1208,10 @@ function HistoryCard({entry,open,onToggle}) {
 }
 
 function EmptyState({msg}) {
-  return(
-    <div style={{textAlign:"center",padding:"70px 20px",gridColumn:"1/-1"}}>
-      <div style={{fontSize:44,opacity:.08,marginBottom:14}}>⚽</div>
-      <p style={{fontSize:13,color:COLORS.text2,lineHeight:1.8,maxWidth:300,margin:"0 auto"}}>{msg}</p>
+  return (
+    <div style={{textAlign:"center", padding:"70px 20px", gridColumn:"1/-1"}}>
+      <div style={{fontSize:44, opacity:.08, marginBottom:14}}>⚽</div>
+      <p style={{fontSize:13, color:COLORS.text2, lineHeight:1.8, maxWidth:300, margin:"0 auto"}}>{msg}</p>
     </div>
   );
 }
