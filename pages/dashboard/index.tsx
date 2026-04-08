@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/router";
 
 /* ══════════════════════════════════════════════════════════════
    BETAI PRO — FULLY RESPONSIVE (Mobile · Tablet · Desktop)
@@ -287,6 +288,7 @@ const LEAGUES_LABEL = { UCL:"Champions League", EPL:"Premier League", "La Liga":
 
 /* ── APP ──────────────────────────────────────────────────── */
 export default function App() {
+  const router = useRouter();
   const s0 = persist.load();
   const [balance, setBalance]     = useState(s0?.balance ?? 500);
   const [slip, setSlip]           = useState(s0?.slip ?? []);
@@ -301,6 +303,7 @@ export default function App() {
   const [depOpen, setDepOpen]     = useState(false);
   const [depVal, setDepVal]       = useState("50");
   const [histExp, setHistExp]     = useState(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => { persist.save({balance, slip, history}); }, [balance, slip, history]);
 
@@ -308,6 +311,17 @@ export default function App() {
     setToast({msg, type});
     setTimeout(() => setToast(null), 2800);
   };
+
+  /* ── LOGOUT ──────────────────────────────────────────────── */
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (_) {}
+    // Clear persisted state
+    try { localStorage.removeItem(LS); } catch (_) {}
+    router.push("/");
+  }
 
   // slip math
   const totalStake = slip.reduce((a, b) => a + (parseFloat(b.stake) || 0), 0);
@@ -381,6 +395,18 @@ export default function App() {
 
   const avgConf = upcoming.length ? Math.round(upcoming.reduce((a, g) => a + g.conf, 0) / upcoming.length) : 0;
 
+  /* shared logout button style — fits inline with existing sidebar/topbar elements */
+  const logoutBtnStyle = {
+    display:"flex", alignItems:"center", gap:6,
+    fontSize:11, fontWeight:700, letterSpacing:"0.06em",
+    color:COLORS.text2, background:"transparent",
+    border:`1px solid ${COLORS.border}`,
+    borderRadius:7, padding:"6px 12px",
+    cursor:"pointer", transition:"all .15s",
+    fontFamily:"inherit",
+    opacity: loggingOut ? 0.5 : 1,
+  };
+
   return (
     <div style={{background:COLORS.bg0, color:COLORS.text0, minHeight:"100vh", fontFamily:"'Barlow', system-ui, sans-serif"}}>
       <style>{`
@@ -412,6 +438,7 @@ export default function App() {
         .card-hover:hover { border-color:rgba(255,255,255,0.14) !important; }
         .odds-hover:hover { background:rgba(255,255,255,0.06) !important; border-color:rgba(255,255,255,0.2) !important; }
         .nav-item:hover { background:rgba(255,255,255,0.04) !important; }
+        .logout-btn:hover { border-color:rgba(255,82,82,0.35) !important; color:#ff5252 !important; }
 
         .layout { display:flex; flex-direction:column; min-height:100vh; }
         .sidebar { display:none !important; }
@@ -519,8 +546,9 @@ export default function App() {
           ))}
         </nav>
 
+        {/* ── Sidebar bottom: stats + logout ── */}
         <div style={{padding:"12px 14px 16px", borderTop:`1px solid ${COLORS.border}`}}>
-          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:7}}>
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:7, marginBottom:10}}>
             {[
               {label:"Win Rate", val:winRate!==null?`${winRate}%`:"74%", col:COLORS.green},
               {label:"Bets",     val:history.length,                      col:COLORS.blue},
@@ -533,6 +561,17 @@ export default function App() {
               </div>
             ))}
           </div>
+          {/* ── LOGOUT — sidebar ── */}
+          <button
+            className="btn logout-btn"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={{...logoutBtnStyle, width:"100%", justifyContent:"center"}}
+          >
+            {loggingOut
+              ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</>
+              : <>↪ SIGN OUT</>}
+          </button>
         </div>
       </aside>
 
@@ -587,6 +626,17 @@ export default function App() {
             🎫 Bet Slip
             {slip.length>0 && <span style={{background:COLORS.green, color:COLORS.bg0, borderRadius:999, padding:"0 8px", fontSize:10, fontWeight:800, lineHeight:"18px"}}>{slip.length}</span>}
           </button>
+          {/* ── LOGOUT — desktop topbar ── */}
+          <button
+            className="btn logout-btn"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={logoutBtnStyle}
+          >
+            {loggingOut
+              ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</>
+              : <>↪ SIGN OUT</>}
+          </button>
         </div>
       </header>
 
@@ -629,6 +679,19 @@ export default function App() {
                 </button>
               ))}
             </nav>
+            {/* ── LOGOUT — mobile drawer ── */}
+            <div style={{padding:"12px 12px 16px", borderTop:`1px solid ${COLORS.border}`}}>
+              <button
+                className="btn logout-btn"
+                onClick={() => { setSidebarOpen(false); handleLogout(); }}
+                disabled={loggingOut}
+                style={{...logoutBtnStyle, width:"100%", justifyContent:"center"}}
+              >
+                {loggingOut
+                  ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</>
+                  : <>↪ SIGN OUT</>}
+              </button>
+            </div>
           </div>
         </>
       )}
