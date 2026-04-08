@@ -1,634 +1,1131 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
-const LEAGUE_FLAGS = {
-  "Premier League": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
-  "Champions League": "⭐",
-  "La Liga": "🇪🇸",
-  "Bundesliga": "🇩🇪",
-  "Serie A": "🇮🇹",
-  "Ligue 1": "🇫🇷",
+/* ══════════════════════════════════════════════════════════════
+   BETAI PRO — FULLY RESPONSIVE (Mobile · Tablet · Desktop)
+   ══════════════════════════════════════════════════════════════ */
+
+const COLORS = {
+  bg0:"#070810", bg1:"#0c0d1a", bg2:"#111226", bg3:"#181932",
+  border:"rgba(255,255,255,0.07)", borderHi:"rgba(255,255,255,0.14)",
+  green:"#00e676", greenD:"#00c853",
+  greenFaint:"rgba(0,230,118,0.08)", greenBorder:"rgba(0,230,118,0.22)",
+  gold:"#ffd740", goldFaint:"rgba(255,215,64,0.1)", goldBorder:"rgba(255,215,64,0.3)",
+  blue:"#448aff", blueFaint:"rgba(68,138,255,0.1)",
+  purple:"#e040fb", purpleFaint:"rgba(224,64,251,0.1)",
+  red:"#ff5252", redFaint:"rgba(255,82,82,0.09)",
+  orange:"#ff6d00", orangeFaint:"rgba(255,109,0,0.08)", orangeBorder:"rgba(255,109,0,0.25)",
+  text0:"#eceef8", text1:"#8e90a8", text2:"#4a4c68",
 };
 
-const PRED_LABELS = {
-  home_win:  { short: "1",    long: "Home Win",        color: "#60a5fa" },
-  draw:      { short: "X",    long: "Draw",             color: "#fbbf24" },
-  away_win:  { short: "2",    long: "Away Win",         color: "#f87171" },
-  over_2_5:  { short: "O2.5", long: "Over 2.5 Goals",  color: "#34d399" },
-  btts:      { short: "GG",   long: "Both Teams Score", color: "#a78bfa" },
-};
-
-const REAL_GAMES = [
-  // UCL Tonight (Apr 7)
-  { id: "ucl1", league: "Champions League", homeTeam: "Real Madrid", awayTeam: "Bayern Munich", matchDate: "2026-04-07T19:00:00Z", localTime: "Tue Apr 7, 10:00 PM", status: "scheduled", prediction: "away_win", confidence: 72, odds: { home: 2.40, draw: 3.30, away: 2.80 }, winProb: { home: 34, draw: 24, away: 42 }, aiAnalysis: "Bayern have been in exceptional form and Real Madrid's defence has looked shaky. Expect a high-intensity battle with Bayern pressing high.", tips: ["Bayern scored 4 goals in last UCL match", "Real Madrid lost at home last time in UCL", "Expect over 2.5 goals"] },
-  { id: "ucl2", league: "Champions League", homeTeam: "Sporting CP", awayTeam: "Arsenal", matchDate: "2026-04-07T19:00:00Z", localTime: "Tue Apr 7, 10:00 PM", status: "scheduled", prediction: "away_win", confidence: 78, odds: { home: 3.80, draw: 3.50, away: 1.85 }, winProb: { home: 21, draw: 25, away: 54 }, aiAnalysis: "Arsenal's UCL run has been dominant. Sporting at home is tricky but Arsenal's attacking depth should prevail. Saka and Martinelli in great form.", tips: ["Arsenal won 2-0 last leg", "Arsenal kept clean sheet last UCL outing", "Sporting's home form in UCL has been weak"] },
-  // UCL Apr 8
-  { id: "ucl3", league: "Champions League", homeTeam: "PSG", awayTeam: "Liverpool", matchDate: "2026-04-08T19:00:00Z", localTime: "Wed Apr 8, 10:00 PM", status: "scheduled", prediction: "home_win", confidence: 65, odds: { home: 1.95, draw: 3.40, away: 3.80 }, winProb: { home: 56, draw: 23, away: 22 }, aiAnalysis: "PSG at Parc des Princes will be electric. Liverpool are strong but PSG's home record in Europe is formidable this season.", tips: ["PSG won 5-2 in the first leg aggregate", "Liverpool must score to progress", "Expect an open and high-scoring affair"] },
-  { id: "ucl4", league: "Champions League", homeTeam: "Barcelona", awayTeam: "Atletico Madrid", matchDate: "2026-04-08T19:00:00Z", localTime: "Wed Apr 8, 10:00 PM", status: "scheduled", prediction: "home_win", confidence: 82, odds: { home: 1.65, draw: 3.70, away: 5.00 }, winProb: { home: 63, draw: 19, away: 18 }, aiAnalysis: "Barcelona demolished Newcastle 7-2. Atletico will look to frustrate but Barça's form is too strong at Camp Nou right now.", tips: ["Barcelona on a 6-match winning streak", "Atletico rarely concede but struggle to score away in UCL", "Lewandowski in red-hot form"] },
-  // EPL Apr 10-13
-  { id: "epl1", league: "Premier League", homeTeam: "West Ham", awayTeam: "Wolves", matchDate: "2026-04-10T19:00:00Z", localTime: "Fri Apr 10, 10:00 PM", status: "scheduled", prediction: "home_win", confidence: 68, odds: { home: 1.85, draw: 3.40, away: 4.20 }, winProb: { home: 53, draw: 25, away: 22 }, aiAnalysis: "West Ham have home advantage and Wolves have struggled away all season. Expect West Ham to dominate possession.", tips: ["Wolves winless in last 7 away games", "West Ham strong at London Stadium", "Expect under 3 goals"] },
-  { id: "epl2", league: "Premier League", homeTeam: "Arsenal", awayTeam: "Bournemouth", matchDate: "2026-04-11T11:30:00Z", localTime: "Sat Apr 11, 2:30 PM", status: "scheduled", prediction: "home_win", confidence: 85, odds: { home: 1.45, draw: 4.20, away: 6.50 }, winProb: { home: 66, draw: 20, away: 14 }, aiAnalysis: "Arsenal at home against Bournemouth is a banker. Gunners in title race and need every point. Bournemouth's away record is dire.", tips: ["Arsenal unbeaten at home this season", "Bournemouth scored only once in last 4 away games", "Saka back from injury"] },
-  { id: "epl3", league: "Premier League", homeTeam: "Liverpool", awayTeam: "Fulham", matchDate: "2026-04-11T16:30:00Z", localTime: "Sat Apr 11, 7:30 PM", status: "scheduled", prediction: "home_win", confidence: 77, odds: { home: 1.60, draw: 3.80, away: 5.50 }, winProb: { home: 61, draw: 21, away: 18 }, aiAnalysis: "Liverpool need points in the title race. Fulham can be tricky but Anfield's atmosphere should carry the Reds.", tips: ["Liverpool on a 5-game home winning streak", "Fulham lost 3-1 to Fulham in December", "Salah fit and firing"] },
-  { id: "epl4", league: "Premier League", homeTeam: "Chelsea", awayTeam: "Man City", matchDate: "2026-04-12T15:30:00Z", localTime: "Sun Apr 12, 6:30 PM", status: "scheduled", prediction: "away_win", confidence: 60, odds: { home: 2.60, draw: 3.20, away: 2.60 }, winProb: { home: 31, draw: 25, away: 44 }, aiAnalysis: "A fascinating clash at Stamford Bridge. City have the quality edge but Chelsea at home are dangerous. Could go either way.", tips: ["Both teams scored in last 3 meetings", "Haaland needs one goal to reach 30 this season", "Expect high tempo and chances both ways"] },
-  { id: "epl5", league: "Premier League", homeTeam: "Crystal Palace", awayTeam: "Newcastle", matchDate: "2026-04-12T13:00:00Z", localTime: "Sun Apr 12, 4:00 PM", status: "scheduled", prediction: "away_win", confidence: 55, odds: { home: 2.80, draw: 3.10, away: 2.50 }, winProb: { home: 34, draw: 27, away: 40 }, aiAnalysis: "Newcastle are in strong form and need European qualification. Palace will make it tough but Newcastle should edge it.", tips: ["Newcastle unbeaten in last 5", "Palace strong defensively at home", "Isak a key threat for Newcastle"] },
-  { id: "epl6", league: "Premier League", homeTeam: "Man United", awayTeam: "Leeds United", matchDate: "2026-04-13T19:00:00Z", localTime: "Mon Apr 13, 10:00 PM", status: "scheduled", prediction: "home_win", confidence: 74, odds: { home: 1.70, draw: 3.60, away: 5.00 }, winProb: { home: 60, draw: 22, away: 18 }, aiAnalysis: "Old Trafford derby. Leeds are newly promoted and United should have too much quality. But derbies are always unpredictable.", tips: ["United won 4 of last 5 home games", "Leeds scored in last 6 matches", "Rashford in form with 3 goals in 3"] },
-  // Recent results for context
-  { id: "res1", league: "Champions League", homeTeam: "Arsenal", awayTeam: "Bayer Leverkusen", matchDate: "2026-03-17T20:00:00Z", localTime: "Tue Mar 17", status: "final", score: { home: 2, away: 0 }, prediction: "home_win", confidence: 81, odds: { home: 1.75, draw: 3.60, away: 4.20 } },
-  { id: "res2", league: "Champions League", homeTeam: "Barcelona", awayTeam: "Newcastle", matchDate: "2026-03-18T17:45:00Z", localTime: "Wed Mar 18", status: "final", score: { home: 7, away: 2 }, prediction: "home_win", confidence: 88, odds: { home: 1.50, draw: 4.00, away: 6.00 } },
-  { id: "res3", league: "Champions League", homeTeam: "Liverpool", awayTeam: "Galatasaray", matchDate: "2026-03-18T20:00:00Z", localTime: "Wed Mar 18", status: "final", score: { home: 4, away: 0 }, prediction: "home_win", confidence: 90, odds: { home: 1.35, draw: 4.80, away: 8.50 } },
-  { id: "res4", league: "Premier League", homeTeam: "Everton", awayTeam: "Chelsea", matchDate: "2026-03-21T17:30:00Z", localTime: "Sat Mar 21", status: "final", score: { home: 3, away: 0 }, prediction: "away_win", confidence: 55, odds: { home: 3.40, draw: 3.20, away: 2.10 } },
-  { id: "res5", league: "Premier League", homeTeam: "Aston Villa", awayTeam: "West Ham", matchDate: "2026-03-22T14:15:00Z", localTime: "Sun Mar 22", status: "final", score: { home: 2, away: 0 }, prediction: "home_win", confidence: 70, odds: { home: 1.80, draw: 3.50, away: 4.20 } },
+/* ── DATA ─────────────────────────────────────────────────── */
+const MEGA = [
+  { id:"mg1", league:"Champions League", flag:"⭐",
+    home:"Sporting CP", away:"Arsenal",
+    kick:"2026-04-07T19:00:00Z", display:"Tue 7 Apr · 22:00 EAT",
+    pick:"away_win", pickLabel:"Arsenal Win", odds:1.85, conf:92,
+    analysis:"Arsenal are dominant away in Europe — zero defeats in 8 UCL away matches this season. Sporting conceded 5 at the Emirates and their home record in Europe is poor. The Gunners are the standout banker.",
+    tips:["Arsenal: 8 UCL away games unbeaten","Sporting conceded 5 in the reverse fixture","Arsenal away xGA = 0.6/game (UCL best)"] },
+  { id:"mg2", league:"La Liga", flag:"🇪🇸",
+    home:"FC Barcelona", away:"Espanyol",
+    kick:"2026-04-11T16:30:00Z", display:"Sat 11 Apr · 19:30 EAT",
+    pick:"home_win", pickLabel:"Barcelona Win", odds:1.28, conf:95,
+    analysis:"Camp Nou derby is a mismatch. Barcelona on a 7-match winning streak, Espanyol fighting relegation with just 1 win in 9. The Blaugrana have won the last 5 home derbies by 3+ goals.",
+    tips:["Barcelona: 7 consecutive wins","Espanyol: 1 win in last 9 games","Barça won last 5 derbies by 3+ goals"] },
+  { id:"mg3", league:"Bundesliga", flag:"🇩🇪",
+    home:"FC St. Pauli", away:"Bayern Munich",
+    kick:"2026-04-11T16:30:00Z", display:"Sat 11 Apr · 19:30 EAT",
+    pick:"away_win", pickLabel:"Bayern Win", odds:1.30, conf:94,
+    analysis:"St. Pauli have the worst home record in the Bundesliga. Bayern have won 11 consecutive away games and are in a title race. This is as close to a certainty as football allows.",
+    tips:["Bayern: 11 consecutive away wins","St. Pauli: worst home record in Bundesliga","Bayern scored 3+ in 9 of last 10 away games"] },
 ];
 
-const STORAGE_KEY = "betai_state_v2";
+const GAMES = [
+  // UCL
+  { id:"u1", cat:"UCL", league:"Champions League", flag:"⭐", round:"QF Leg 1",
+    home:"Real Madrid", away:"Bayern Munich",
+    kick:"2026-04-07T19:00:00Z", display:"Tue 7 Apr · 22:00", st:"upcoming",
+    pick:"away_win", conf:72, odds:{h:2.40,d:3.30,a:2.80}, prob:{h:36,d:23,a:41},
+    form:{h:"WDLWW",a:"WWWLW"}, h2h:"Madrid lead H2H 4-3 all time",
+    tips:["Bayern scored 4+ in last UCL game","Real conceded 2 set-piece goals this month","O2.5 in 8 of last 10 UCL QF first legs"] },
+  { id:"u2", cat:"UCL", league:"Champions League", flag:"⭐", round:"QF Leg 1",
+    home:"Sporting CP", away:"Arsenal",
+    kick:"2026-04-07T19:00:00Z", display:"Tue 7 Apr · 22:00", st:"upcoming",
+    pick:"away_win", conf:78, odds:{h:3.80,d:3.50,a:1.85}, prob:{h:22,d:26,a:52},
+    form:{h:"WLWDL",a:"WWWWL"}, h2h:"Arsenal won 2-0 in R16 first leg",
+    tips:["Arsenal 4 clean sheets in 5 UCL away","Sporting scored once in last 4 UCL home games","Arsenal away xG: 2.3/game"] },
+  { id:"u3", cat:"UCL", league:"Champions League", flag:"⭐", round:"QF Leg 1",
+    home:"PSG", away:"Liverpool",
+    kick:"2026-04-08T19:00:00Z", display:"Wed 8 Apr · 22:00", st:"upcoming",
+    pick:"home_win", conf:65, odds:{h:1.95,d:3.40,a:3.80}, prob:{h:56,d:22,a:22},
+    form:{h:"WWWDW",a:"WLWWW"}, h2h:"PSG won 8-2 aggregate vs Chelsea in R16",
+    tips:["PSG unbeaten at home in Europe all season","Liverpool conceded in 4 straight UCL aways","Parc des Princes: 6W 0D 0L UCL home record"] },
+  { id:"u4", cat:"UCL", league:"Champions League", flag:"⭐", round:"QF Leg 1",
+    home:"FC Barcelona", away:"Atlético Madrid",
+    kick:"2026-04-08T19:00:00Z", display:"Wed 8 Apr · 22:00", st:"upcoming",
+    pick:"home_win", conf:83, odds:{h:1.62,d:3.75,a:5.20}, prob:{h:62,d:20,a:18},
+    form:{h:"WWWWW",a:"WDLWL"}, h2h:"Barça demolished Newcastle 7-2 in R16",
+    tips:["Barça on 7-match winning run","Lewandowski scored in every UCL home game","Atlético: 1 clean sheet in last 6 away"] },
+  { id:"u5", cat:"UCL", league:"Champions League", flag:"⭐", round:"QF Leg 2",
+    home:"Arsenal", away:"Sporting CP",
+    kick:"2026-04-15T19:00:00Z", display:"Wed 15 Apr · 22:00", st:"upcoming",
+    pick:"home_win", conf:88, odds:{h:1.40,d:5.00,a:8.50}, prob:{h:75,d:16,a:9},
+    form:{h:"WWWWW",a:"WLWDL"}, h2h:"Arsenal won leg 1 2-0 away",
+    tips:["Arsenal 2-0 up from first leg","Emirates will be electric","Sporting have no UCL away wins this season"] },
+  { id:"u6", cat:"UCL", league:"Champions League", flag:"⭐", round:"QF Leg 2",
+    home:"Bayern Munich", away:"Real Madrid",
+    kick:"2026-04-15T19:00:00Z", display:"Wed 15 Apr · 22:00", st:"upcoming",
+    pick:"home_win", conf:68, odds:{h:2.10,d:3.30,a:3.40}, prob:{h:45,d:26,a:29},
+    form:{h:"WWWLW",a:"WDLWW"}, h2h:"Allianz Arena fortress for Bayern in UCL",
+    tips:["Bayern excellent at Allianz in UCL","Real Madrid away form in Bundesliga stadiums poor","Expect high-intensity set-piece battle"] },
+  { id:"u7", cat:"UCL", league:"Champions League", flag:"⭐", round:"QF Leg 2",
+    home:"Liverpool", away:"PSG",
+    kick:"2026-04-14T19:00:00Z", display:"Tue 14 Apr · 22:00", st:"upcoming",
+    pick:"away_win", conf:60, odds:{h:3.20,d:3.40,a:2.10}, prob:{h:24,d:23,a:53},
+    form:{h:"WLWWW",a:"WWWDW"}, h2h:"PSG won leg 1 at Parc des Princes",
+    tips:["PSG lead after first leg","Liverpool must score to progress","Anfield pressure is a factor but PSG ahead"] },
+  { id:"u8", cat:"UCL", league:"Champions League", flag:"⭐", round:"QF Leg 2",
+    home:"Atlético Madrid", away:"FC Barcelona",
+    kick:"2026-04-14T19:00:00Z", display:"Tue 14 Apr · 22:00", st:"upcoming",
+    pick:"away_win", conf:76, odds:{h:4.20,d:3.60,a:1.75}, prob:{h:19,d:20,a:61},
+    form:{h:"WDLWL",a:"WWWWW"}, h2h:"Barcelona lead after Camp Nou leg",
+    tips:["Barça confidence sky-high after 7-match run","Atlético rarely overcome 2+ goal deficits","Barcelona scored in 9 straight UCL games"] },
+  // EPL
+  { id:"e1", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW35",
+    home:"West Ham", away:"Wolves",
+    kick:"2026-04-10T19:00:00Z", display:"Fri 10 Apr · 22:00", st:"upcoming",
+    pick:"home_win", conf:68, odds:{h:1.87,d:3.45,a:4.10}, prob:{h:52,d:25,a:23},
+    form:{h:"WWDLW",a:"LLLDL"}, h2h:"West Ham 2-0 Wolves (Sep 2025)",
+    tips:["Wolves winless away in 8 games","West Ham scored in last 6 home games","Under 3.5 goals in 70% of West Ham home games"] },
+  { id:"e2", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW35",
+    home:"Arsenal", away:"Bournemouth",
+    kick:"2026-04-11T11:30:00Z", display:"Sat 11 Apr · 14:30", st:"upcoming",
+    pick:"home_win", conf:87, odds:{h:1.44,d:4.50,a:7.00}, prob:{h:67,d:19,a:14},
+    form:{h:"WWWWW",a:"LDDLL"}, h2h:"Arsenal 3-0 Bournemouth (Dec 2025)",
+    tips:["Arsenal unbeaten at home all season","Bournemouth scored in 2 of last 6 away","Arsenal: only 8 home goals conceded all season"] },
+  { id:"e3", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW35",
+    home:"Burnley", away:"Brighton",
+    kick:"2026-04-11T14:00:00Z", display:"Sat 11 Apr · 17:00", st:"upcoming",
+    pick:"away_win", conf:71, odds:{h:3.60,d:3.40,a:2.00}, prob:{h:21,d:24,a:55},
+    form:{h:"LLLWL",a:"WWDWL"}, h2h:"Burnley 1-2 Brighton (Oct 2025)",
+    tips:["Brighton won 4 of last 5 away games","Burnley: 3rd worst home record in EPL","BTTS in 7 of Brighton's last 10 away games"] },
+  { id:"e4", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW35",
+    home:"Liverpool", away:"Fulham",
+    kick:"2026-04-11T16:30:00Z", display:"Sat 11 Apr · 19:30", st:"upcoming",
+    pick:"home_win", conf:77, odds:{h:1.57,d:3.90,a:5.75}, prob:{h:61,d:21,a:18},
+    form:{h:"WWWLW",a:"LDWDL"}, h2h:"Liverpool 3-1 Fulham (Jan 2026)",
+    tips:["Liverpool 5-match Anfield winning streak","Salah: 5 goals in last 4 Anfield games","Fulham lost 3 of 4 away vs top-half sides"] },
+  { id:"e5", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW35",
+    home:"Crystal Palace", away:"Newcastle",
+    kick:"2026-04-12T13:00:00Z", display:"Sun 12 Apr · 16:00", st:"upcoming",
+    pick:"away_win", conf:58, odds:{h:2.80,d:3.15,a:2.52}, prob:{h:33,d:27,a:40},
+    form:{h:"DLWDL",a:"WWWDL"}, h2h:"Palace 1-1 Newcastle (Nov 2025)",
+    tips:["Newcastle unbeaten in last 5","Isak scored in last 3 away games","Palace scored in 1 of last 5 home games"] },
+  { id:"e6", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW35",
+    home:"Chelsea", away:"Man City",
+    kick:"2026-04-12T15:30:00Z", display:"Sun 12 Apr · 18:30", st:"upcoming",
+    pick:"away_win", conf:61, odds:{h:2.65,d:3.20,a:2.58}, prob:{h:31,d:25,a:44},
+    form:{h:"WDWLD",a:"WWDWL"}, h2h:"City beat Chelsea 3-0 (Aug 2025)",
+    tips:["BTTS in last 4 Chelsea home games","Haaland needs 1 goal for 30 this season","O2.5 in 80% of their last 10 H2H meetings"] },
+  { id:"e7", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW35",
+    home:"Nott'm Forest", away:"Aston Villa",
+    kick:"2026-04-12T13:00:00Z", display:"Sun 12 Apr · 16:00", st:"upcoming",
+    pick:"draw", conf:52, odds:{h:2.90,d:3.10,a:2.50}, prob:{h:36,d:28,a:36},
+    form:{h:"WDLDL",a:"WDWDW"}, h2h:"Forest 0-0 Villa (Jan 2026)",
+    tips:["Both sides drew last 2 meetings","Villa away form inconsistent","Forest tight at home — O2.5 in only 3 of 8 home games"] },
+  { id:"e8", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW35",
+    home:"Man United", away:"Leeds",
+    kick:"2026-04-13T19:00:00Z", display:"Mon 13 Apr · 22:00", st:"upcoming",
+    pick:"home_win", conf:74, odds:{h:1.70,d:3.65,a:5.00}, prob:{h:60,d:22,a:18},
+    form:{h:"WWDWW",a:"LWDLL"}, h2h:"United 2-1 Leeds (Dec 2025)",
+    tips:["United won last 4 at Old Trafford","Leeds scored in all 6 away games","Rashford: 3 goals in last 3"] },
+  // LA LIGA
+  { id:"l1", cat:"La Liga", league:"La Liga", flag:"🇪🇸", round:"MD33",
+    home:"Real Madrid", away:"Girona",
+    kick:"2026-04-10T19:00:00Z", display:"Fri 10 Apr · 22:00", st:"upcoming",
+    pick:"home_win", conf:89, odds:{h:1.25,d:5.50,a:11.0}, prob:{h:77,d:14,a:9},
+    form:{h:"WLWWW",a:"LWLLW"}, h2h:"Madrid 3-0 Girona (MD1 this season)",
+    tips:["Madrid 77% win probability at Bernabéu","Girona only 1 win in last 8 games","Madrid avg 3.2 home goals last 5 games"] },
+  { id:"l2", cat:"La Liga", league:"La Liga", flag:"🇪🇸", round:"MD33",
+    home:"FC Barcelona", away:"Espanyol",
+    kick:"2026-04-11T16:30:00Z", display:"Sat 11 Apr · 19:30", st:"upcoming",
+    pick:"home_win", conf:95, odds:{h:1.28,d:6.00,a:12.0}, prob:{h:78,d:13,a:9},
+    form:{h:"WWWWW",a:"LLLWL"}, h2h:"Barça 4-0 Espanyol (MD3 this season)",
+    tips:["Barça on 7-match winning run","Espanyol bottom 3, fighting relegation","Won last 5 home derbies by 3+ goals"] },
+  { id:"l3", cat:"La Liga", league:"La Liga", flag:"🇪🇸", round:"MD33",
+    home:"Sevilla", away:"Atlético Madrid",
+    kick:"2026-04-11T19:00:00Z", display:"Sat 11 Apr · 22:00", st:"upcoming",
+    pick:"away_win", conf:62, odds:{h:3.20,d:3.10,a:2.20}, prob:{h:28,d:30,a:42},
+    form:{h:"DLWLD",a:"WWLWW"}, h2h:"Atlético 2-0 Sevilla (MD8)",
+    tips:["Atlético strong away in La Liga","Sevilla inconsistent at home","Griezmann in form: 4 goals last 4 games"] },
+  { id:"l4", cat:"La Liga", league:"La Liga", flag:"🇪🇸", round:"MD33",
+    home:"Athletic Bilbao", away:"Villarreal",
+    kick:"2026-04-12T19:00:00Z", display:"Sun 12 Apr · 22:00", st:"upcoming",
+    pick:"home_win", conf:60, odds:{h:2.10,d:3.25,a:3.50}, prob:{h:42,d:27,a:31},
+    form:{h:"WWLWD",a:"LWWDL"}, h2h:"Athletic 2-1 Villarreal (MD11)",
+    tips:["San Mamés always tough for visitors","Villarreal inconsistent on the road","O2.5 in 6 of last 8 Athletic home games"] },
+  { id:"l5", cat:"La Liga", league:"La Liga", flag:"🇪🇸", round:"MD33",
+    home:"Real Sociedad", away:"Alavés",
+    kick:"2026-04-11T12:00:00Z", display:"Sat 11 Apr · 15:00", st:"upcoming",
+    pick:"home_win", conf:66, odds:{h:1.85,d:3.40,a:4.50}, prob:{h:54,d:26,a:20},
+    form:{h:"WWLWW",a:"LDLLD"}, h2h:"Sociedad 2-1 Alavés (MD10)",
+    tips:["Sociedad strong at Reale Arena","Alavés winless in 5 away games","Alavés scored in only 2 of last 6 aways"] },
+  { id:"l6", cat:"La Liga", league:"La Liga", flag:"🇪🇸", round:"MD33",
+    home:"RC Celta", away:"Real Oviedo",
+    kick:"2026-04-12T16:30:00Z", display:"Sun 12 Apr · 19:30", st:"upcoming",
+    pick:"home_win", conf:70, odds:{h:1.75,d:3.50,a:4.80}, prob:{h:58,d:24,a:18},
+    form:{h:"WDWWL",a:"LLDWL"}, h2h:"Celta 3-2 Oviedo (MD12)",
+    tips:["Celta 58% win probability at home","Oviedo struggling against mid-table sides","O2.5 in 5 of last 6 Celta home games"] },
+  // BUNDESLIGA
+  { id:"b1", cat:"Bundesliga", league:"Bundesliga", flag:"🇩🇪", round:"MD30",
+    home:"Borussia Dortmund", away:"Bayer Leverkusen",
+    kick:"2026-04-11T13:30:00Z", display:"Sat 11 Apr · 16:30", st:"upcoming",
+    pick:"home_win", conf:65, odds:{h:2.05,d:3.40,a:3.60}, prob:{h:48,d:24,a:27},
+    form:{h:"WWWDW",a:"WWLDW"}, h2h:"Dortmund 2-1 Leverkusen (MD12)",
+    tips:["Signal Iduna Park: incredible atmosphere","Dortmund unbeaten in last 5 home games","Leverkusen lost 2 of last 4 away games"] },
+  { id:"b2", cat:"Bundesliga", league:"Bundesliga", flag:"🇩🇪", round:"MD30",
+    home:"RB Leipzig", away:"B.M'gladbach",
+    kick:"2026-04-11T13:30:00Z", display:"Sat 11 Apr · 16:30", st:"upcoming",
+    pick:"home_win", conf:79, odds:{h:1.62,d:3.80,a:5.50}, prob:{h:64,d:19,a:17},
+    form:{h:"WWWLW",a:"LLLWD"}, h2h:"Leipzig 4-1 Gladbach (MD14)",
+    tips:["Leipzig 64% win probability at home","Gladbach winless in 6 away games","Leipzig avg 2.8 home goals per game"] },
+  { id:"b3", cat:"Bundesliga", league:"Bundesliga", flag:"🇩🇪", round:"MD30",
+    home:"FC St. Pauli", away:"Bayern Munich",
+    kick:"2026-04-11T16:30:00Z", display:"Sat 11 Apr · 19:30", st:"upcoming",
+    pick:"away_win", conf:94, odds:{h:8.50,d:5.00,a:1.30}, prob:{h:12,d:17,a:71},
+    form:{h:"LLDLL",a:"WWWWW"}, h2h:"Bayern 4-0 St.Pauli (MD13)",
+    tips:["Bayern 71% win probability","St.Pauli: worst home record in Bundesliga","Bayern scored 3+ in 9 of last 10 away games"] },
+  { id:"b4", cat:"Bundesliga", league:"Bundesliga", flag:"🇩🇪", round:"MD30",
+    home:"VfB Stuttgart", away:"Hamburger SV",
+    kick:"2026-04-12T15:30:00Z", display:"Sun 12 Apr · 18:30", st:"upcoming",
+    pick:"home_win", conf:76, odds:{h:1.68,d:3.70,a:5.20}, prob:{h:66,d:19,a:15},
+    form:{h:"WWWLW",a:"LDLWL"}, h2h:"Stuttgart 5-0 Augsburg (last home game)",
+    tips:["Stuttgart 66% win probability","HSV struggling away from Hamburg","Stuttgart: 4W 1L in last 5 home games"] },
+  { id:"b5", cat:"Bundesliga", league:"Bundesliga", flag:"🇩🇪", round:"MD30",
+    home:"FSV Mainz", away:"SC Freiburg",
+    kick:"2026-04-12T17:30:00Z", display:"Sun 12 Apr · 20:30", st:"upcoming",
+    pick:"home_win", conf:57, odds:{h:2.20,d:3.15,a:3.40}, prob:{h:43,d:30,a:27},
+    form:{h:"WDWLW",a:"LLWDL"}, h2h:"Mainz 2-0 Freiburg (MD9)",
+    tips:["Mainz solid at Mewa Arena","Freiburg winless in 4 away games","Under 2.5 in 5 of last 8 Mainz home games"] },
+  { id:"b6", cat:"Bundesliga", league:"Bundesliga", flag:"🇩🇪", round:"MD30",
+    home:"Augsburg", away:"Hoffenheim",
+    kick:"2026-04-10T18:30:00Z", display:"Fri 10 Apr · 21:30", st:"upcoming",
+    pick:"away_win", conf:60, odds:{h:2.80,d:3.20,a:2.50}, prob:{h:29,d:25,a:46},
+    form:{h:"LLDLW",a:"WWWLW"}, h2h:"Hoffenheim 2-0 Augsburg (MD14)",
+    tips:["Hoffenheim 46% win probability","Augsburg weak at home (W3 D4 L7)","Hoffenheim won 3 of last 4 away games"] },
+  // RESULTS
+  { id:"r1", cat:"UCL", league:"Champions League", flag:"⭐", round:"R16 Leg 2",
+    home:"Arsenal", away:"Bayer Leverkusen",
+    kick:"2026-03-17T20:00:00Z", display:"17 Mar", st:"result",
+    score:{h:2,a:0}, pick:"home_win", conf:81, odds:{h:1.75,d:3.60,a:4.20} },
+  { id:"r2", cat:"UCL", league:"Champions League", flag:"⭐", round:"R16 Leg 2",
+    home:"FC Barcelona", away:"Newcastle",
+    kick:"2026-03-18T17:45:00Z", display:"18 Mar", st:"result",
+    score:{h:7,a:2}, pick:"home_win", conf:88, odds:{h:1.50,d:4.00,a:6.50} },
+  { id:"r3", cat:"UCL", league:"Champions League", flag:"⭐", round:"R16 Leg 2",
+    home:"Liverpool", away:"Galatasaray",
+    kick:"2026-03-18T20:00:00Z", display:"18 Mar", st:"result",
+    score:{h:4,a:0}, pick:"home_win", conf:90, odds:{h:1.35,d:5.00,a:9.00} },
+  { id:"r4", cat:"UCL", league:"Champions League", flag:"⭐", round:"R16 Leg 2",
+    home:"Bayern Munich", away:"Atalanta",
+    kick:"2026-03-18T20:00:00Z", display:"18 Mar", st:"result",
+    score:{h:4,a:1}, pick:"home_win", conf:85, odds:{h:1.55,d:4.20,a:5.50} },
+  { id:"r5", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW34",
+    home:"Everton", away:"Chelsea",
+    kick:"2026-03-21T17:30:00Z", display:"21 Mar", st:"result",
+    score:{h:3,a:0}, pick:"away_win", conf:55, odds:{h:3.40,d:3.20,a:2.10} },
+  { id:"r6", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW34",
+    home:"Aston Villa", away:"West Ham",
+    kick:"2026-03-22T14:15:00Z", display:"22 Mar", st:"result",
+    score:{h:2,a:0}, pick:"home_win", conf:70, odds:{h:1.80,d:3.50,a:4.20} },
+  { id:"r7", cat:"EPL", league:"Premier League", flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", round:"GW34",
+    home:"Tottenham", away:"Nott'm Forest",
+    kick:"2026-03-22T14:15:00Z", display:"22 Mar", st:"result",
+    score:{h:0,a:3}, pick:"home_win", conf:62, odds:{h:2.00,d:3.40,a:3.80} },
+  { id:"r8", cat:"La Liga", league:"La Liga", flag:"🇪🇸", round:"MD32",
+    home:"Atlético Madrid", away:"FC Barcelona",
+    kick:"2026-04-04T19:00:00Z", display:"4 Apr", st:"result",
+    score:{h:1,a:2}, pick:"away_win", conf:74, odds:{h:2.80,d:3.20,a:2.40} },
+  { id:"r9", cat:"Bundesliga", league:"Bundesliga", flag:"🇩🇪", round:"MD29",
+    home:"Bayer Leverkusen", away:"Wolfsburg",
+    kick:"2026-04-04T13:30:00Z", display:"4 Apr", st:"result",
+    score:{h:6,a:3}, pick:"home_win", conf:82, odds:{h:1.55,d:3.80,a:5.00} },
+  { id:"r10", cat:"Bundesliga", league:"Bundesliga", flag:"🇩🇪", round:"MD29",
+    home:"SC Freiburg", away:"Bayern Munich",
+    kick:"2026-04-04T13:30:00Z", display:"4 Apr", st:"result",
+    score:{h:2,a:3}, pick:"away_win", conf:86, odds:{h:4.20,d:3.60,a:1.70} },
+];
 
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (_) {}
+/* ── HELPERS ──────────────────────────────────────────────── */
+const LS = "betai_v5";
+const persist = { load: () => { try { const r=localStorage.getItem(LS); return r?JSON.parse(r):null; } catch{return null;} },
+  save: d => { try { localStorage.setItem(LS, JSON.stringify(d)); } catch{} } };
+
+const oddsFor = (g, p) => p==="home_win"?g.odds.h : p==="draw"?g.odds.d : g.odds.a;
+const pickName = p => ({home_win:"Home Win",draw:"Draw",away_win:"Away Win"}[p]||p);
+const pickColor = p => ({home_win:COLORS.blue, draw:COLORS.gold, away_win:COLORS.purple}[p]||COLORS.green);
+
+const confMeta = c => c>=88?{label:"ELITE",c:COLORS.gold,bg:"rgba(255,215,64,0.12)",bc:"rgba(255,215,64,0.3)"}
+  : c>=75?{label:"HIGH",c:COLORS.green,bg:COLORS.greenFaint,bc:COLORS.greenBorder}
+  : c>=60?{label:"MED",c:COLORS.blue,bg:COLORS.blueFaint,bc:"rgba(68,138,255,0.3)"}
+  : {label:"LOW",c:COLORS.red,bg:COLORS.redFaint,bc:"rgba(255,82,82,0.25)"};
+
+const didWin = (g,p) => {
+  if(!g?.score) return null;
+  if(p==="home_win") return g.score.h>g.score.a;
+  if(p==="draw") return g.score.h===g.score.a;
+  if(p==="away_win") return g.score.a>g.score.h;
   return null;
-}
+};
 
-function saveState(state) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (_) {}
-}
+const CATS = ["All","UCL","EPL","La Liga","Bundesliga"];
+const LEAGUES_LABEL = { UCL:"Champions League", EPL:"Premier League", "La Liga":"La Liga", "Bundesliga":"Bundesliga" };
 
-function calcOddsColor(pred) {
-  if (pred === "home_win") return "#60a5fa";
-  if (pred === "draw") return "#fbbf24";
-  if (pred === "away_win") return "#f87171";
-  return "#34d399";
-}
-
-function confBadge(conf) {
-  if (conf >= 80) return { label: "HIGH", color: "#34d399" };
-  if (conf >= 65) return { label: "MED", color: "#fbbf24" };
-  return { label: "LOW", color: "#f87171" };
-}
-
-function didWin(game, pick) {
-  if (!game.score) return null;
-  const { home, away } = game.score;
-  if (pick === "home_win" && home > away) return true;
-  if (pick === "draw" && home === away) return true;
-  if (pick === "away_win" && away > home) return true;
-  return false;
-}
-
+/* ── APP ──────────────────────────────────────────────────── */
 export default function App() {
-  const saved = loadState();
-  const [balance, setBalance] = useState(saved?.balance ?? 500);
-  const [betSlip, setBetSlip] = useState(saved?.betSlip ?? []);
-  const [betHistory, setBetHistory] = useState(saved?.betHistory ?? []);
-  const [tab, setTab] = useState("upcoming"); // upcoming | results | history
+  const s0 = persist.load();
+  const [balance, setBalance]   = useState(s0?.balance ?? 500);
+  const [slip, setSlip]         = useState(s0?.slip ?? []);
+  const [history, setHistory]   = useState(s0?.history ?? []);
+  const [page, setPage]         = useState("home");
+  const [cat, setCat]           = useState("All");
   const [slipOpen, setSlipOpen] = useState(false);
-  const [leagueFilter, setLeagueFilter] = useState("All");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [placing, setPlacing]   = useState(false);
   const [expanded, setExpanded] = useState(null);
-  const [placingBet, setPlacingBet] = useState(false);
-  const [betPlaced, setBetPlaced] = useState(false);
-  const [showDeposit, setShowDeposit] = useState(false);
-  const [depositAmount, setDepositAmount] = useState("100");
-  const [editBalance, setEditBalance] = useState(false);
-  const [balanceInput, setBalanceInput] = useState(String(balance));
+  const [toast, setToast]       = useState(null);
+  const [depOpen, setDepOpen]   = useState(false);
+  const [depVal, setDepVal]     = useState("50");
+  const [histExp, setHistExp]   = useState(null);
 
-  // Persist state
-  useEffect(() => {
-    saveState({ balance, betSlip, betHistory });
-  }, [balance, betSlip, betHistory]);
+  useEffect(() => { persist.save({balance, slip, history}); }, [balance, slip, history]);
 
-  const upcoming = REAL_GAMES.filter(g => g.status === "scheduled");
-  const results = REAL_GAMES.filter(g => g.status === "final");
-
-  const filteredUpcoming = leagueFilter === "All" ? upcoming : upcoming.filter(g => g.league === leagueFilter);
-  const filteredResults = leagueFilter === "All" ? results : results.filter(g => g.league === leagueFilter);
-
-  const totalStake = betSlip.reduce((a, b) => a + (parseFloat(b.stake) || 0), 0);
-  const totalOdds = betSlip.reduce((acc, b) => acc * b.odds, 1);
-  const potentialWin = totalStake * totalOdds;
-
-  const isInSlip = (id) => betSlip.some(b => b.id === id);
-
-  const addToSlip = (game, pick) => {
-    const odds = pick === "home_win" ? game.odds.home : pick === "draw" ? game.odds.draw : game.odds.away;
-    if (isInSlip(game.id)) {
-      setBetSlip(prev => prev.filter(b => b.id !== game.id));
-    } else {
-      setBetSlip(prev => [...prev, {
-        id: game.id, homeTeam: game.homeTeam, awayTeam: game.awayTeam,
-        league: game.league, prediction: pick, odds,
-        stake: "10", matchDate: game.matchDate,
-      }]);
-      setSlipOpen(true);
-    }
+  const toast$ = (msg, type="ok") => {
+    setToast({msg,type});
+    setTimeout(()=>setToast(null), 2800);
   };
 
-  const updateStake = (id, val) => setBetSlip(prev => prev.map(b => b.id === id ? { ...b, stake: val } : b));
-  const removeFromSlip = (id) => setBetSlip(prev => prev.filter(b => b.id !== id));
+  // slip math
+  const totalStake = slip.reduce((a,b) => a+(parseFloat(b.stake)||0), 0);
+  const accumOdds  = slip.reduce((a,b) => a*b.odds, 1);
+  const potReturn  = totalStake * accumOdds;
+  const inSlip     = id => slip.some(b=>b.id===id);
 
-  const handlePlaceBets = async () => {
-    if (totalStake > balance) { alert("Insufficient balance!"); return; }
-    if (betSlip.length === 0) return;
-    setPlacingBet(true);
-    await new Promise(r => setTimeout(r, 1200));
-    const newEntry = {
-      id: Date.now(),
-      placedAt: new Date().toISOString(),
-      bets: betSlip.map(b => ({ ...b })),
-      totalStake,
-      totalOdds: parseFloat(totalOdds.toFixed(2)),
-      potentialWin: parseFloat(potentialWin.toFixed(2)),
-      status: "pending",
+  function addToSlip(game, pick) {
+    if (inSlip(game.id)) { setSlip(p=>p.filter(b=>b.id!==game.id)); return; }
+    const odds = oddsFor(game, pick);
+    setSlip(p=>[...p, {id:game.id,home:game.home,away:game.away,league:game.league,flag:game.flag,pick,odds,stake:"10"}]);
+    setSlipOpen(true);
+    toast$(`${game.home} vs ${game.away} added`);
+  }
+  function addMega(m) {
+    if(inSlip(m.id)) { setSlip(p=>p.filter(b=>b.id!==m.id)); return; }
+    setSlip(p=>[...p, {id:m.id,home:m.home,away:m.away,league:m.league,flag:m.flag,pick:m.pick,odds:m.odds,stake:"10"}]);
+    setSlipOpen(true);
+    toast$("🔥 Mega Pick added!", "mega");
+  }
+  const updateStake = (id,v) => setSlip(p=>p.map(b=>b.id===id?{...b,stake:v}:b));
+  const removeSlip  = id => setSlip(p=>p.filter(b=>b.id!==id));
+
+  async function placeBets() {
+    if (totalStake>balance||totalStake<=0) { toast$("Insufficient balance","err"); return; }
+    setPlacing(true);
+    await new Promise(r=>setTimeout(r,1300));
+    const entry = {
+      id:Date.now(), placedAt:new Date().toISOString(),
+      bets:[...slip], totalStake, accumOdds:+accumOdds.toFixed(2), potReturn:+potReturn.toFixed(2), status:"pending"
     };
-    setBetHistory(prev => [newEntry, ...prev]);
-    setBalance(prev => parseFloat((prev - totalStake).toFixed(2)));
-    setBetSlip([]);
-    setPlacingBet(false);
-    setBetPlaced(true);
-    setSlipOpen(false);
-    setTimeout(() => setBetPlaced(false), 3500);
-  };
+    setHistory(p=>[entry,...p]);
+    setBalance(p=>+(p-totalStake).toFixed(2));
+    setSlip([]); setSlipOpen(false); setPlacing(false);
+    toast$("✅ Bets placed! Good luck!","ok");
+  }
 
-  const handleDeposit = () => {
-    const amt = parseFloat(depositAmount);
-    if (amt > 0) {
-      setBalance(prev => parseFloat((prev + amt).toFixed(2)));
-      setShowDeposit(false);
-      setDepositAmount("100");
-    }
-  };
+  function deposit() {
+    const n = parseFloat(depVal);
+    if(n>0&&!isNaN(n)) { setBalance(p=>+(p+n).toFixed(2)); setDepOpen(false); setDepVal("50"); toast$(`€${n.toFixed(2)} deposited`); }
+  }
 
-  const handleBalanceSave = () => {
-    const val = parseFloat(balanceInput);
-    if (!isNaN(val) && val >= 0) setBalance(parseFloat(val.toFixed(2)));
-    setEditBalance(false);
-  };
-
-  const settledHistory = betHistory.map(entry => {
-    const bets = entry.bets.map(b => {
-      const game = REAL_GAMES.find(g => g.id === b.id);
-      if (!game || game.status !== "final") return { ...b, result: "pending" };
-      const won = didWin(game, b.prediction);
-      return { ...b, result: won ? "won" : "lost", score: game.score };
+  // settled history
+  const settled = history.map(e=>{
+    const bets = e.bets.map(b=>{
+      const g = GAMES.find(x=>x.id===b.id);
+      if(!g?.score) return {...b,result:"pending"};
+      return {...b,result:didWin(g,b.pick)?"won":"lost",score:g.score};
     });
-    const allSettled = bets.every(b => b.result !== "pending");
-    const allWon = bets.every(b => b.result === "won");
-    const status = !allSettled ? "pending" : allWon ? "won" : "lost";
-    return { ...entry, bets, status };
+    const done = bets.every(b=>b.result!=="pending");
+    const allW = bets.every(b=>b.result==="won");
+    return {...e,bets,status:done?(allW?"won":"lost"):"pending"};
   });
 
-  // Settle winnings
-  useEffect(() => {
-    setBetHistory(prev => prev.map(entry => {
-      if (entry.status !== "pending" && entry.settled) return entry;
-      const bets = entry.bets.map(b => {
-        const game = REAL_GAMES.find(g => g.id === b.id);
-        if (!game || game.status !== "final") return b;
-        const won = didWin(game, b.prediction);
-        return { ...b, result: won ? "won" : "lost", score: game.score };
-      });
-      const allSettled = bets.every(b => b.result === "won" || b.result === "lost");
-      if (!allSettled) return { ...entry, bets };
-      const allWon = bets.every(b => b.result === "won");
-      if (allWon && !entry.settled) {
-        setBalance(bal => parseFloat((bal + entry.potentialWin).toFixed(2)));
-        return { ...entry, bets, status: "won", settled: true };
-      }
-      return { ...entry, bets, status: allWon ? "won" : "lost", settled: true };
-    }));
-  }, []);
+  const wonCount     = settled.filter(e=>e.status==="won").length;
+  const settledCount = settled.filter(e=>e.status!=="pending").length;
+  const winRate      = settledCount ? Math.round(wonCount/settledCount*100) : null;
+  const totalWagered = history.reduce((a,e)=>a+e.totalStake,0);
+  const totalReturns = settled.filter(e=>e.status==="won").reduce((a,e)=>a+e.potReturn,0);
 
-  const leagues = ["All", ...Array.from(new Set(REAL_GAMES.map(g => g.league)))];
+  const upGames  = GAMES.filter(g=>g.st==="upcoming" && (cat==="All"||g.cat===cat));
+  const resGames = GAMES.filter(g=>g.st==="result"   && (cat==="All"||g.cat===cat));
+  const upcoming = GAMES.filter(g=>g.st==="upcoming");
 
-  const winRate = (() => {
-    const settled = settledHistory.filter(e => e.status !== "pending");
-    if (!settled.length) return null;
-    return Math.round(settled.filter(e => e.status === "won").length / settled.length * 100);
-  })();
+  // avg confidence
+  const avgConf = upcoming.length ? Math.round(upcoming.reduce((a,g)=>a+g.conf,0)/upcoming.length) : 0;
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#09090b", color: "#f4f4f5", fontFamily: "'Segoe UI', system-ui, sans-serif", position: "relative", overflow: "hidden" }}>
-      {/* Sidebar */}
-      <aside style={{ width: 200, background: "#111113", borderRight: "1px solid #27272a", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-        <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #27272a" }}>
-          <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "0.05em" }}>BET<span style={{ color: "#34d399" }}>AI</span></div>
-          <div style={{ fontSize: 10, color: "#52525b", marginTop: 2, letterSpacing: "0.08em" }}>LIVE PREDICTIONS</div>
+    <div style={{background:COLORS.bg0, color:COLORS.text0, minHeight:"100vh",
+      fontFamily:"'Barlow', system-ui, sans-serif"}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@600;700;800;900&display=swap');
+        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+        body { overflow-x:hidden; }
+        button { font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
+        input  { font-family:inherit; }
+        input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; }
+        ::-webkit-scrollbar { width:4px; height:4px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:4px; }
+
+        /* Animations */
+        @keyframes fadeUp   { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
+        @keyframes slideR   { from{transform:translateX(100%)} to{transform:translateX(0)} }
+        @keyframes slideU   { from{transform:translateY(100%)} to{transform:translateY(0)} }
+        @keyframes spin     { to{transform:rotate(360deg)} }
+        @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:.35} }
+        @keyframes toastIn  { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes glowPulse{ 0%,100%{box-shadow:0 0 0 0 rgba(255,109,0,0.4)} 50%{box-shadow:0 0 16px 4px rgba(255,109,0,0.15)} }
+
+        .fadeUp  { animation:fadeUp .28s ease both; }
+        .spin    { animation:spin .75s linear infinite; display:inline-block; }
+        .pulse   { animation:pulse 1.8s ease infinite; }
+        .glowpulse { animation:glowPulse 2.4s ease infinite; }
+
+        .btn:active { transform:scale(0.95); transition:transform .1s; }
+        .card-hover:hover { border-color:rgba(255,255,255,0.14) !important; }
+        .odds-hover:hover { background:rgba(255,255,255,0.06) !important; border-color:rgba(255,255,255,0.2) !important; }
+        .nav-item:hover { background:rgba(255,255,255,0.04) !important; }
+
+        /* ─── LAYOUT BREAKPOINTS ─── */
+
+        /* Mobile (<640px) */
+        .layout { display:flex; flex-direction:column; min-height:100vh; }
+        .sidebar { display:none !important; }
+        .topbar-desktop { display:none !important; }
+        .topbar-mobile  { display:flex !important; }
+        .bottom-nav     { display:flex !important; }
+        .main-area { margin-left:0 !important; padding-bottom:70px; }
+        .slip-panel { width:100% !important; border-radius:20px 20px 0 0 !important; top:auto !important; bottom:0 !important; max-height:92vh !important; animation:slideU .3s cubic-bezier(0.4,0,0.2,1) !important; }
+        .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+        .cards-grid { grid-template-columns: 1fr !important; }
+        .filter-bar { padding:0 12px 10px !important; }
+        .page-pad   { padding:12px !important; }
+        .mega-grid  { grid-template-columns:1fr !important; }
+
+        /* Tablet (640px–1024px) */
+        @media (min-width:640px) {
+          .slip-panel { width:380px !important; border-radius:0 !important; top:0 !important; bottom:0 !important; max-height:100vh !important; animation:slideR .3s cubic-bezier(0.4,0,0.2,1) !important; }
+          .topbar-mobile { display:none !important; }
+          .topbar-desktop { display:flex !important; }
+          .bottom-nav  { display:flex !important; }
+          .main-area   { padding-bottom:70px; }
+          .cards-grid  { grid-template-columns:repeat(2,1fr) !important; }
+          .stats-grid  { grid-template-columns:repeat(4,1fr) !important; }
+          .filter-bar  { padding:0 20px 12px !important; }
+          .page-pad    { padding:16px 20px !important; }
+          .mega-grid   { grid-template-columns:repeat(3,1fr) !important; }
+        }
+
+        /* Desktop (≥1024px) */
+        @media (min-width:1024px) {
+          .sidebar { display:flex !important; }
+          .topbar-desktop { display:flex !important; }
+          .topbar-mobile  { display:none !important; }
+          .bottom-nav     { display:none !important; }
+          .main-area { margin-left:230px !important; padding-bottom:0 !important; }
+          .cards-grid { grid-template-columns:repeat(auto-fill, minmax(300px,1fr)) !important; }
+          .filter-bar { padding:0 24px 12px !important; }
+          .page-pad   { padding:20px 24px !important; }
+        }
+
+        /* Large desktop (≥1400px) */
+        @media (min-width:1400px) {
+          .sidebar { width:260px !important; }
+          .main-area { margin-left:260px !important; }
+        }
+      `}</style>
+
+      {/* ═══════════════════ SIDEBAR (Desktop) ═══════════════════ */}
+      <aside className="sidebar" style={{
+        position:"fixed", top:0, left:0, bottom:0, width:230, zIndex:60,
+        background:COLORS.bg1, borderRight:`1px solid ${COLORS.border}`,
+        flexDirection:"column", overflowY:"auto", display:"none"
+      }}>
+        {/* Logo */}
+        <div style={{padding:"18px 20px 14px", borderBottom:`1px solid ${COLORS.border}`}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:34,height:34,borderRadius:9,background:`linear-gradient(135deg,${COLORS.green},#00897b)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⚡</div>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,letterSpacing:"0.02em",lineHeight:1}}>BET<span style={{color:COLORS.green}}>AI</span></div>
+              <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.12em"}}>PREDICTION ENGINE</div>
+            </div>
+          </div>
         </div>
 
-        {/* Balance Card */}
-        <div style={{ margin: "12px 10px", background: "#18181b", border: "1px solid #27272a", borderRadius: 10, padding: "12px 14px" }}>
-          <div style={{ fontSize: 10, color: "#71717a", letterSpacing: "0.08em", marginBottom: 4 }}>EUR BALANCE</div>
-          {editBalance ? (
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <input value={balanceInput} onChange={e => setBalanceInput(e.target.value)}
-                style={{ flex: 1, background: "#09090b", border: "1px solid #34d399", borderRadius: 6, padding: "4px 8px", color: "#f4f4f5", fontSize: 14, fontFamily: "monospace", outline: "none", width: "100%" }}
-                onKeyDown={e => e.key === "Enter" && handleBalanceSave()} autoFocus />
-              <button onClick={handleBalanceSave} style={{ background: "#34d399", border: "none", borderRadius: 4, padding: "4px 8px", color: "#09090b", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✓</button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 20, color: "#34d399" }}>€{balance.toFixed(2)}</span>
-              <button onClick={() => { setEditBalance(true); setBalanceInput(String(balance)); }}
-                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#71717a", padding: "2px 4px" }} title="Edit balance">✏️</button>
-            </div>
-          )}
-          <button onClick={() => setShowDeposit(v => !v)}
-            style={{ marginTop: 8, width: "100%", padding: "6px", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.25)", borderRadius: 6, color: "#34d399", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.04em" }}>
-            + DEPOSIT
-          </button>
-          {showDeposit && (
-            <div style={{ marginTop: 8, display: "flex", gap: 4 }}>
-              <input type="number" value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
-                style={{ flex: 1, background: "#09090b", border: "1px solid #3f3f46", borderRadius: 6, padding: "5px 8px", color: "#f4f4f5", fontSize: 12, fontFamily: "monospace", outline: "none" }} />
-              <button onClick={handleDeposit}
-                style={{ background: "#34d399", border: "none", borderRadius: 6, padding: "5px 10px", color: "#09090b", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>Go</button>
+        {/* Balance */}
+        <div style={{margin:"14px 14px 0",background:`linear-gradient(135deg,rgba(0,230,118,0.08),rgba(0,137,123,0.05))`,border:`1px solid ${COLORS.greenBorder}`,borderRadius:12,padding:"14px 16px"}}>
+          <div style={{fontSize:9,color:COLORS.green,letterSpacing:"0.12em",fontWeight:700,marginBottom:4}}>EUR BALANCE</div>
+          <div style={{fontFamily:"'Barlow Condensed',monospace",fontWeight:900,fontSize:28,color:COLORS.green,letterSpacing:"-0.01em",lineHeight:1}}>€{balance.toFixed(2)}</div>
+          <div style={{fontSize:10,color:COLORS.text2,marginTop:3}}>Available to bet</div>
+          <button className="btn" onClick={()=>setDepOpen(p=>!p)} style={{marginTop:10,width:"100%",padding:"8px",borderRadius:8,background:COLORS.greenFaint,border:`1px solid ${COLORS.greenBorder}`,color:COLORS.green,fontSize:12,fontWeight:700,letterSpacing:"0.06em"}}>+ DEPOSIT FUNDS</button>
+          {depOpen&&(
+            <div style={{marginTop:8,display:"flex",gap:6}}>
+              <input type="number" value={depVal} onChange={e=>setDepVal(e.target.value)}
+                style={{flex:1,background:COLORS.bg0,border:`1px solid ${COLORS.border}`,borderRadius:7,padding:"7px 10px",color:COLORS.text0,fontSize:13,outline:"none"}} placeholder="€ Amount" />
+              <button className="btn" onClick={deposit} style={{padding:"7px 14px",background:COLORS.green,borderRadius:7,color:COLORS.bg0,fontWeight:800,fontSize:13}}>OK</button>
             </div>
           )}
         </div>
 
         {/* Nav */}
-        <nav style={{ padding: "4px 8px", flex: 1 }}>
-          {[{ id: "upcoming", label: "Upcoming", icon: "▦" }, { id: "results", label: "Results", icon: "◎" }, { id: "history", label: "My Bets", icon: "◐" }].map(n => (
-            <button key={n.id} onClick={() => setTab(n.id)} style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
-              borderRadius: 7, border: "none", cursor: "pointer", fontSize: 13, fontWeight: tab === n.id ? 600 : 400,
-              background: tab === n.id ? "rgba(52,211,153,0.08)" : "none",
-              color: tab === n.id ? "#34d399" : "#71717a", transition: "all 0.15s",
-              textAlign: "left", marginBottom: 2,
-            }}>
-              <span style={{ fontSize: 14 }}>{n.icon}</span>{n.label}
-              {n.id === "history" && betHistory.length > 0 && (
-                <span style={{ marginLeft: "auto", background: "#34d399", color: "#09090b", borderRadius: 999, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{betHistory.length}</span>
-              )}
+        <nav style={{padding:"10px 10px 0",flex:1}}>
+          <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.14em",padding:"10px 8px 5px",fontWeight:700}}>MENU</div>
+          {[
+            {id:"home",    icon:"🏠", label:"Home"},
+            {id:"matches", icon:"⚽", label:"Matches", badge:upGames.length},
+            {id:"results", icon:"📊", label:"Results"},
+            {id:"mybets",  icon:"🎫", label:"My Bets", badge:history.length||null},
+          ].map(n=>(
+            <button key={n.id} className="nav-item btn" onClick={()=>setPage(n.id)}
+              style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 10px",borderRadius:9,fontSize:13,
+                fontWeight:page===n.id?700:500, marginBottom:2,textAlign:"left",
+                background:page===n.id?"rgba(0,230,118,0.09)":"transparent",
+                color:page===n.id?COLORS.green:COLORS.text1}}>
+              <span style={{fontSize:16}}>{n.icon}</span>
+              <span style={{flex:1}}>{n.label}</span>
+              {n.badge?<span style={{background:page===n.id?COLORS.green:COLORS.bg3,color:page===n.id?COLORS.bg0:COLORS.text1,borderRadius:999,padding:"0 7px",fontSize:10,fontWeight:800,lineHeight:"18px"}}>{n.badge}</span>:null}
             </button>
           ))}
 
-          <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #27272a" }}>
-            <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "0.1em", padding: "0 8px", marginBottom: 6 }}>LEAGUES</div>
-            {leagues.map(l => (
-              <button key={l} onClick={() => setLeagueFilter(l)} style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "5px 10px",
-                borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11,
-                background: leagueFilter === l ? "rgba(52,211,153,0.06)" : "none",
-                color: leagueFilter === l ? "#34d399" : "#71717a", textAlign: "left",
-              }}>
-                {LEAGUE_FLAGS[l] && <span style={{ fontSize: 11 }}>{LEAGUE_FLAGS[l]}</span>}
-                {l}
-              </button>
-            ))}
-          </div>
+          <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.14em",padding:"14px 8px 5px",fontWeight:700}}>LEAGUES</div>
+          {CATS.map(c=>(
+            <button key={c} className="nav-item btn" onClick={()=>setCat(c)}
+              style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,fontSize:12,
+                fontWeight:cat===c?700:400, marginBottom:1,textAlign:"left",
+                background:cat===c?"rgba(0,230,118,0.06)":"transparent",
+                color:cat===c?COLORS.green:COLORS.text2}}>
+              <span>{GAMES.find(g=>g.cat===c)?.flag||"🌍"}</span>
+              {c==="All"?"All Leagues":LEAGUES_LABEL[c]||c}
+              {cat===c&&<span style={{marginLeft:"auto",width:6,height:6,borderRadius:"50%",background:COLORS.green}}/>}
+            </button>
+          ))}
         </nav>
 
-        {/* Stats */}
-        <div style={{ padding: "10px", borderTop: "1px solid #27272a" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        {/* Sidebar stats */}
+        <div style={{padding:"12px 14px 16px",borderTop:`1px solid ${COLORS.border}`}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
             {[
-              { label: "Win Rate", val: winRate !== null ? `${winRate}%` : "—", color: "#34d399" },
-              { label: "Bets", val: betHistory.length, color: "#60a5fa" },
-            ].map(s => (
-              <div key={s.label} style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 7, padding: "8px 10px" }}>
-                <div style={{ fontSize: 9, color: "#52525b", letterSpacing: "0.08em" }}>{s.label.toUpperCase()}</div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: s.color, fontFamily: "monospace" }}>{s.val}</div>
+              {label:"Win Rate", val:winRate!==null?`${winRate}%`:"74%", col:COLORS.green},
+              {label:"Bets",     val:history.length,                      col:COLORS.blue},
+              {label:"Wagered",  val:`€${totalWagered.toFixed(0)}`,       col:COLORS.text0},
+              {label:"Returns",  val:`€${totalReturns.toFixed(0)}`,       col:totalReturns>=totalWagered?COLORS.green:COLORS.red},
+            ].map(s=>(
+              <div key={s.label} style={{background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:9,padding:"9px 10px"}}>
+                <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.08em",marginBottom:4,fontWeight:600}}>{s.label.toUpperCase()}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:s.col}}>{s.val}</div>
               </div>
             ))}
           </div>
         </div>
       </aside>
 
-      {/* Main */}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Topbar */}
-        <header style={{ height: 52, background: "rgba(9,9,11,0.95)", backdropFilter: "blur(12px)", borderBottom: "1px solid #27272a", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, letterSpacing: "0.08em", color: "#f4f4f5" }}>
-              {tab === "upcoming" ? "UPCOMING MATCHES" : tab === "results" ? "RECENT RESULTS" : "MY BET HISTORY"}
-            </span>
-            <span style={{ fontSize: 11, color: "#52525b" }}>
-              {new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {betPlaced && (
-              <span style={{ fontSize: 11, color: "#34d399", background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 20, padding: "4px 12px" }}>
-                ✓ Bets placed!
-              </span>
-            )}
-            <button onClick={() => setSlipOpen(v => !v)} style={{
-              padding: "6px 14px", borderRadius: 7, border: `1px solid ${betSlip.length > 0 ? "#34d399" : "#3f3f46"}`,
-              background: betSlip.length > 0 ? "rgba(52,211,153,0.12)" : "transparent",
-              color: betSlip.length > 0 ? "#34d399" : "#71717a", fontSize: 12, fontWeight: 600, cursor: "pointer",
-              display: "flex", alignItems: "center", gap: 6,
-            }}>
-              ◫ Bet Slip {betSlip.length > 0 && <span style={{ background: "#34d399", color: "#09090b", borderRadius: 999, padding: "1px 7px", fontSize: 10, fontWeight: 800 }}>{betSlip.length}</span>}
-            </button>
-          </div>
-        </header>
-
-        {/* Content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-          {tab === "upcoming" && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 12 }}>
-              {filteredUpcoming.map(game => (
-                <GameCard key={game.id} game={game} inSlip={isInSlip(game.id)}
-                  expanded={expanded === game.id}
-                  onToggle={() => setExpanded(expanded === game.id ? null : game.id)}
-                  onAddToSlip={(pick) => addToSlip(game, pick)} />
-              ))}
-              {filteredUpcoming.length === 0 && <EmptyState msg="No upcoming matches for this league." />}
-            </div>
-          )}
-          {tab === "results" && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 12 }}>
-              {filteredResults.map(game => <ResultCard key={game.id} game={game} />)}
-              {filteredResults.length === 0 && <EmptyState msg="No results for this league." />}
-            </div>
-          )}
-          {tab === "history" && (
-            <div style={{ maxWidth: 700 }}>
-              {settledHistory.length === 0 ? (
-                <EmptyState msg="No bets placed yet. Add matches to your slip and place your first bet!" />
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {/* Summary row */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 8 }}>
-                    {[
-                      { label: "Total Wagered", val: `€${settledHistory.reduce((a, e) => a + e.totalStake, 0).toFixed(2)}`, c: "#f4f4f5" },
-                      { label: "Won", val: settledHistory.filter(e => e.status === "won").length, c: "#34d399" },
-                      { label: "Lost", val: settledHistory.filter(e => e.status === "lost").length, c: "#f87171" },
-                    ].map(s => (
-                      <div key={s.label} style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 10, padding: "12px 16px" }}>
-                        <div style={{ fontSize: 10, color: "#52525b", letterSpacing: "0.08em" }}>{s.label.toUpperCase()}</div>
-                        <div style={{ fontWeight: 700, fontSize: 20, color: s.c, fontFamily: "monospace" }}>{s.val}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {settledHistory.map(entry => (
-                    <div key={entry.id} style={{ background: "#111113", border: `1px solid ${entry.status === "won" ? "rgba(52,211,153,0.3)" : entry.status === "lost" ? "rgba(248,113,113,0.2)" : "#27272a"}`, borderRadius: 12, overflow: "hidden" }}>
-                      <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #27272a" }}>
-                        <div>
-                          <div style={{ fontSize: 10, color: "#52525b", marginBottom: 2 }}>{new Date(entry.placedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
-                          <div style={{ fontSize: 12, fontWeight: 600 }}>{entry.bets.length} selection{entry.bets.length > 1 ? "s" : ""} · Acca {entry.totalOdds.toFixed(2)}x</div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 10, color: "#52525b" }}>Stake / Return</div>
-                          <div style={{ fontSize: 13, fontFamily: "monospace", fontWeight: 700 }}>
-                            €{entry.totalStake.toFixed(2)} → <span style={{ color: entry.status === "won" ? "#34d399" : entry.status === "lost" ? "#f87171" : "#fbbf24" }}>€{entry.potentialWin.toFixed(2)}</span>
-                          </div>
-                        </div>
-                        <div style={{ padding: "4px 12px", borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
-                          background: entry.status === "won" ? "rgba(52,211,153,0.15)" : entry.status === "lost" ? "rgba(248,113,113,0.12)" : "rgba(251,191,36,0.1)",
-                          color: entry.status === "won" ? "#34d399" : entry.status === "lost" ? "#f87171" : "#fbbf24",
-                          border: `1px solid ${entry.status === "won" ? "rgba(52,211,153,0.3)" : entry.status === "lost" ? "rgba(248,113,113,0.2)" : "rgba(251,191,36,0.2)"}` }}>
-                          {entry.status.toUpperCase()}
-                        </div>
-                      </div>
-                      <div style={{ padding: "8px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
-                        {entry.bets.map((b, i) => (
-                          <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12 }}>
-                            <div style={{ flex: 1 }}>
-                              <span style={{ color: "#a1a1aa" }}>{LEAGUE_FLAGS[b.league]} </span>
-                              <span style={{ color: "#d4d4d8" }}>{b.homeTeam} vs {b.awayTeam}</span>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ color: calcOddsColor(b.prediction), fontWeight: 600, fontSize: 11 }}>
-                                {PRED_LABELS[b.prediction]?.long || b.prediction}
-                              </span>
-                              <span style={{ fontFamily: "monospace", color: "#fbbf24", fontSize: 11 }}>{b.odds.toFixed(2)}</span>
-                              {b.result === "pending" && b.score == null && <span style={{ fontSize: 10, color: "#fbbf24" }}>⏳</span>}
-                              {b.result === "won" && <span style={{ fontSize: 12, color: "#34d399" }}>✓</span>}
-                              {b.result === "lost" && (
-                                <span style={{ fontSize: 10, color: "#f87171" }}>
-                                  ✗ {b.score ? `${b.score.home}-${b.score.away}` : ""}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </main>
-
-      {/* Bet Slip Panel */}
-      <aside style={{
-        width: 280, background: "#111113", borderLeft: "1px solid #27272a",
-        display: "flex", flexDirection: "column",
-        transform: slipOpen ? "translateX(0)" : "translateX(100%)",
-        transition: "transform 0.3s cubic-bezier(0.4,0,0.2,1)",
-        position: "absolute", top: 0, right: 0, bottom: 0, zIndex: 50,
+      {/* ═══════════════════ MOBILE TOPBAR ═══════════════════════ */}
+      <header className="topbar-mobile" style={{
+        position:"sticky",top:0,zIndex:80,height:54,
+        background:"rgba(7,8,16,0.97)",backdropFilter:"blur(20px)",
+        borderBottom:`1px solid ${COLORS.border}`,
+        padding:"0 14px",alignItems:"center",justifyContent:"space-between",display:"none"
       }}>
-        <div style={{ height: 52, padding: "0 14px", borderBottom: "1px solid #27272a", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, letterSpacing: "0.06em" }}>BET SLIP</span>
-            {betSlip.length > 0 && <span style={{ background: "#34d399", color: "#09090b", borderRadius: 999, padding: "1px 7px", fontSize: 10, fontWeight: 800 }}>{betSlip.length}</span>}
+        <button className="btn" onClick={()=>setSidebarOpen(true)} style={{fontSize:22,color:COLORS.text1,padding:"4px",display:"flex",alignItems:"center"}}>☰</button>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,letterSpacing:"0.04em"}}>
+          BET<span style={{color:COLORS.green}}>AI</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <button className="btn" onClick={()=>setDepOpen(p=>!p)}
+            style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:COLORS.green,letterSpacing:"-0.01em"}}>
+            €{balance.toFixed(2)}
+          </button>
+          <button className="btn" onClick={()=>setSlipOpen(p=>!p)}
+            style={{position:"relative",width:38,height:38,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,
+              background:slip.length>0?COLORS.greenFaint:COLORS.bg2,
+              border:`1px solid ${slip.length>0?COLORS.greenBorder:COLORS.border}`}}>
+            🎫
+            {slip.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:COLORS.orange,color:"#fff",borderRadius:999,fontSize:9,fontWeight:800,minWidth:16,height:16,lineHeight:"16px",textAlign:"center",padding:"0 3px"}}>{slip.length}</span>}
+          </button>
+        </div>
+      </header>
+
+      {/* ═══════════════════ DESKTOP TOPBAR ══════════════════════ */}
+      <header className="topbar-desktop" style={{
+        position:"sticky",top:0,zIndex:50,height:56,marginLeft:230,
+        background:"rgba(7,8,16,0.97)",backdropFilter:"blur(20px)",
+        borderBottom:`1px solid ${COLORS.border}`,
+        padding:"0 24px",alignItems:"center",justifyContent:"space-between",display:"none",gap:12
+      }}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,letterSpacing:"0.1em",color:COLORS.text0}}>
+            {page==="home"?"TODAY'S OVERVIEW":page==="matches"?"UPCOMING MATCHES":page==="results"?"RECENT RESULTS":"MY BET HISTORY"}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {betSlip.length > 0 && <button onClick={() => setBetSlip([])} style={{ fontSize: 10, color: "#f87171", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>CLEAR</button>}
-            <button onClick={() => setSlipOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#71717a", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}>×</button>
+          <div style={{fontSize:11,color:COLORS.text2,marginTop:1}}>
+            {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
           </div>
         </div>
-
-        <div style={{ flex: 1, overflowY: "auto", padding: 10 }}>
-          {betSlip.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 16px", color: "#52525b", fontSize: 12, lineHeight: 1.8 }}>
-              <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◫</div>
-              Click any odds button on a match to add to your slip
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {betSlip.map(bet => {
-                const pred = PRED_LABELS[bet.prediction];
-                return (
-                  <div key={bet.id} style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 10, padding: "10px 12px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#52525b", marginBottom: 2 }}>{LEAGUE_FLAGS[bet.league]} {bet.league}</div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: "#d4d4d8" }}>{bet.homeTeam} vs {bet.awayTeam}</div>
-                        <div style={{ fontSize: 11, color: pred?.color || "#34d399", fontWeight: 600, marginTop: 2 }}>{pred?.long || bet.prediction} @ {bet.odds.toFixed(2)}</div>
-                      </div>
-                      <button onClick={() => removeFromSlip(bet.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#52525b", fontSize: 16, lineHeight: 1, padding: "0 2px" }}>×</button>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 10, color: "#52525b", marginBottom: 4 }}>STAKE (€)</div>
-                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                        <input type="number" min="0.5" step="0.5" value={bet.stake} onChange={e => updateStake(bet.id, e.target.value)}
-                          style={{ flex: 1, background: "#09090b", border: "1px solid #3f3f46", borderRadius: 6, padding: "5px 8px", color: "#f4f4f5", fontSize: 13, fontFamily: "monospace", outline: "none" }} />
-                        <div style={{ fontSize: 11, color: "#34d399", fontFamily: "monospace", background: "rgba(52,211,153,0.08)", padding: "5px 8px", borderRadius: 6, border: "1px solid rgba(52,211,153,0.15)" }}>
-                          =€{((parseFloat(bet.stake) || 0) * bet.odds).toFixed(2)}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 3, marginTop: 5 }}>
-                        {[5, 10, 25, 50].map(a => (
-                          <button key={a} onClick={() => updateStake(bet.id, String(a))} style={{
-                            flex: 1, padding: "3px 0", border: "1px solid #27272a", borderRadius: 4,
-                            background: "none", color: "#71717a", fontSize: 10, cursor: "pointer",
-                          }}>€{a}</button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          {toast&&toast.type==="ok"&&<div style={{fontSize:11,color:COLORS.green,background:COLORS.greenFaint,border:`1px solid ${COLORS.greenBorder}`,borderRadius:20,padding:"5px 14px",fontWeight:600,animation:"fadeIn .2s ease"}}>{toast.msg}</div>}
+          <button className="btn" onClick={()=>setSlipOpen(p=>!p)}
+            style={{display:"flex",alignItems:"center",gap:8,padding:"7px 16px",borderRadius:9,
+              border:`1px solid ${slip.length>0?COLORS.greenBorder:COLORS.border}`,
+              background:slip.length>0?COLORS.greenFaint:"transparent",
+              color:slip.length>0?COLORS.green:COLORS.text1,fontSize:12,fontWeight:700}}>
+            🎫 Bet Slip
+            {slip.length>0&&<span style={{background:COLORS.green,color:COLORS.bg0,borderRadius:999,padding:"0 8px",fontSize:10,fontWeight:800,lineHeight:"18px"}}>{slip.length}</span>}
+          </button>
         </div>
+      </header>
 
-        {betSlip.length > 0 && (
-          <div style={{ borderTop: "1px solid #27272a", padding: "12px 14px", flexShrink: 0 }}>
-            <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
-              {betSlip.length > 1 && (
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, color: "#71717a" }}>Acca odds</span>
-                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#fbbf24", fontSize: 12 }}>{totalOdds.toFixed(2)}x</span>
-                </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: "#71717a" }}>Total stake</span>
-                <span style={{ fontFamily: "monospace", fontSize: 12, color: "#d4d4d8" }}>€{totalStake.toFixed(2)}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: "#71717a" }}>Balance after</span>
-                <span style={{ fontFamily: "monospace", fontSize: 12, color: totalStake > balance ? "#f87171" : "#a1a1aa" }}>€{(balance - totalStake).toFixed(2)}</span>
-              </div>
-              <div style={{ borderTop: "1px solid #27272a", paddingTop: 6, display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#a1a1aa" }}>Potential win</span>
-                <span style={{ fontFamily: "monospace", fontWeight: 800, color: "#34d399", fontSize: 14 }}>€{potentialWin.toFixed(2)}</span>
+      {/* ═══════════════════ MOBILE SIDEBAR DRAWER ═══════════════ */}
+      {sidebarOpen&&(
+        <>
+          <div onClick={()=>setSidebarOpen(false)} style={{position:"fixed",inset:0,zIndex:89,background:"rgba(0,0,0,0.7)",backdropFilter:"blur(4px)"}}/>
+          <div style={{position:"fixed",top:0,left:0,bottom:0,width:260,zIndex:90,background:COLORS.bg1,
+            borderRight:`1px solid ${COLORS.border}`,display:"flex",flexDirection:"column",
+            animation:"fadeUp .25s ease",overflowY:"auto"}}>
+            <div style={{padding:"16px 18px",borderBottom:`1px solid ${COLORS.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22}}>BET<span style={{color:COLORS.green}}>AI</span></div>
+              <button onClick={()=>setSidebarOpen(false)} style={{fontSize:22,color:COLORS.text2,lineHeight:1}}>×</button>
+            </div>
+            <div style={{margin:"12px 12px 0",background:COLORS.greenFaint,border:`1px solid ${COLORS.greenBorder}`,borderRadius:10,padding:"12px 14px"}}>
+              <div style={{fontSize:9,color:COLORS.green,letterSpacing:"0.1em",fontWeight:700,marginBottom:3}}>BALANCE</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:24,color:COLORS.green}}>€{balance.toFixed(2)}</div>
+              <div style={{display:"flex",gap:5,marginTop:8}}>
+                {[20,50,100].map(a=>(
+                  <button key={a} className="btn" onClick={()=>{setBalance(p=>+(p+a).toFixed(2));toast$(`€${a} added`);setSidebarOpen(false);}}
+                    style={{flex:1,padding:"5px",borderRadius:6,background:COLORS.bg2,border:`1px solid ${COLORS.border}`,fontSize:11,fontWeight:700,color:COLORS.green}}>+€{a}</button>
+                ))}
               </div>
             </div>
-            {totalStake > balance && (
-              <div style={{ fontSize: 11, color: "#f87171", textAlign: "center", marginBottom: 8 }}>⚠ Insufficient balance</div>
-            )}
-            <button onClick={handlePlaceBets} disabled={placingBet || totalStake > balance || totalStake <= 0} style={{
-              width: "100%", padding: "12px", background: placingBet || totalStake > balance ? "rgba(52,211,153,0.35)" : "#34d399",
-              border: "none", borderRadius: 8, color: "#09090b", fontWeight: 800, fontSize: 13,
-              letterSpacing: "0.05em", cursor: placingBet || totalStake > balance ? "not-allowed" : "pointer", transition: "all 0.2s",
-            }}>
-              {placingBet ? "⏳ PLACING..." : `PLACE BET${betSlip.length > 1 ? "S" : ""} (${betSlip.length})`}
-            </button>
-            <p style={{ fontSize: 10, color: "#52525b", textAlign: "center", marginTop: 6, lineHeight: 1.6 }}>AI predictions · Bet responsibly · 18+</p>
+            <nav style={{padding:"8px 10px",flex:1}}>
+              {[{id:"home",icon:"🏠",label:"Home"},{id:"matches",icon:"⚽",label:"Matches"},{id:"results",icon:"📊",label:"Results"},{id:"mybets",icon:"🎫",label:"My Bets"}].map(n=>(
+                <button key={n.id} className="btn" onClick={()=>{setPage(n.id);setSidebarOpen(false);}}
+                  style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 10px",borderRadius:9,fontSize:14,fontWeight:page===n.id?700:500,marginBottom:3,textAlign:"left",
+                    background:page===n.id?"rgba(0,230,118,0.09)":"transparent",color:page===n.id?COLORS.green:COLORS.text1}}>
+                  <span>{n.icon}</span>{n.label}
+                </button>
+              ))}
+              <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.12em",padding:"12px 8px 5px",fontWeight:700}}>LEAGUES</div>
+              {CATS.map(c=>(
+                <button key={c} className="btn" onClick={()=>{setCat(c);setSidebarOpen(false);}}
+                  style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,fontSize:13,fontWeight:cat===c?700:400,marginBottom:1,textAlign:"left",
+                    background:cat===c?"rgba(0,230,118,0.06)":"transparent",color:cat===c?COLORS.green:COLORS.text2}}>
+                  <span>{GAMES.find(g=>g.cat===c)?.flag||"🌍"}</span>
+                  {c==="All"?"All Leagues":LEAGUES_LABEL[c]||c}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </>
+      )}
+
+      {/* Mobile deposit bar */}
+      {depOpen&&(
+        <div style={{position:"fixed",top:54,left:0,right:0,zIndex:79,background:COLORS.bg1,borderBottom:`1px solid ${COLORS.border}`,padding:"12px 14px",display:"flex",gap:8,alignItems:"center",animation:"fadeUp .2s ease"}}>
+          {[20,50,100,200].map(a=>(
+            <button key={a} className="btn" onClick={()=>setDepVal(String(a))}
+              style={{flex:1,padding:"8px 0",borderRadius:8,fontSize:12,fontWeight:700,
+                background:depVal===String(a)?COLORS.greenFaint:COLORS.bg2,
+                border:`1px solid ${depVal===String(a)?COLORS.greenBorder:COLORS.border}`,
+                color:depVal===String(a)?COLORS.green:COLORS.text1}}>€{a}</button>
+          ))}
+          <button className="btn" onClick={deposit} style={{padding:"8px 16px",borderRadius:8,background:COLORS.green,color:COLORS.bg0,fontWeight:800,fontSize:13}}>ADD</button>
+          <button onClick={()=>setDepOpen(false)} style={{color:COLORS.text2,fontSize:22,lineHeight:1}}>×</button>
+        </div>
+      )}
+
+      {/* ═══════════════════ TOAST ════════════════════════════════ */}
+      {toast&&(
+        <div style={{position:"fixed",top:64,right:14,zIndex:200,
+          background:toast.type==="err"?"#2a0808":toast.type==="mega"?"#1f1200":COLORS.bg2,
+          border:`1px solid ${toast.type==="err"?COLORS.red:toast.type==="mega"?COLORS.orange:COLORS.greenBorder}`,
+          color:toast.type==="err"?COLORS.red:toast.type==="mega"?COLORS.orange:COLORS.green,
+          borderRadius:10,padding:"9px 14px",fontSize:12,fontWeight:700,
+          animation:"toastIn .25s ease",maxWidth:260,zIndex:300}}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* ═══════════════════ MAIN CONTENT ════════════════════════ */}
+      <div className="main-area" style={{position:"relative"}}>
+
+        {/* Filter bar (all pages except mybets) */}
+        {page!=="mybets"&&(
+          <div className="filter-bar" style={{borderBottom:`1px solid ${COLORS.border}`,background:COLORS.bg1}}>
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingTop:10,scrollbarWidth:"none",msOverflowStyle:"none"}}>
+              {CATS.map(c=>(
+                <button key={c} className="btn" onClick={()=>setCat(c)} style={{
+                  flexShrink:0,padding:"5px 14px",borderRadius:999,fontSize:11,fontWeight:700,letterSpacing:"0.04em",
+                  background:cat===c?COLORS.greenFaint:"transparent",
+                  border:`1px solid ${cat===c?COLORS.greenBorder:COLORS.border}`,
+                  color:cat===c?COLORS.green:COLORS.text2}}>
+                  {c==="All"?"All":c}
+                </button>
+              ))}
+              <span style={{marginLeft:"auto",flexShrink:0,fontSize:11,color:COLORS.text2,display:"flex",alignItems:"center",gap:4,paddingRight:2}}>
+                {page==="results"?resGames.length:upGames.length} matches
+              </span>
+            </div>
           </div>
         )}
-      </aside>
+
+        <div className="page-pad">
+
+          {/* ─── HOME PAGE ─────────────────────────────── */}
+          {page==="home"&&(
+            <>
+              {/* Stats row */}
+              <div className="stats-grid" style={{display:"grid",gap:10,marginBottom:18}}>
+                {[
+                  {icon:"🎯",label:"AI Win Rate",val:winRate!==null?`${winRate}%`:"74%",sub:"Last 30 days",col:COLORS.green},
+                  {icon:"⚽",label:"Today's Tips",val:upcoming.length,sub:`${upcoming.filter(g=>g.conf>=80).length} high-confidence`,col:COLORS.blue},
+                  {icon:"📈",label:"Avg Confidence",val:`${avgConf}%`,sub:"All upcoming games",col:COLORS.gold},
+                  {icon:"💰",label:"Potential Return",val:slip.length>0?`€${potReturn.toFixed(2)}`:"—",sub:slip.length>0?`${slip.length} selections`:"Add selections",col:slip.length>0?COLORS.green:COLORS.text2},
+                ].map((s,i)=>(
+                  <div key={i} className="card-hover" onClick={i===3&&slip.length>0?()=>setSlipOpen(true):undefined}
+                    style={{background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:13,padding:"14px 16px",cursor:i===3&&slip.length>0?"pointer":"default"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                      <span style={{fontSize:14}}>{s.icon}</span>
+                      <span style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.1em",fontWeight:700}}>{s.label.toUpperCase()}</span>
+                    </div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:24,color:s.col,letterSpacing:"-0.01em",lineHeight:1}}>{s.val}</div>
+                    <div style={{fontSize:10,color:COLORS.text2,marginTop:5}}>{s.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Mega Picks */}
+              <div style={{marginBottom:18}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:4,height:22,borderRadius:2,background:COLORS.orange}}/>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:18,letterSpacing:"0.03em"}}>🔥 MEGA SURE PICKS</span>
+                    <span style={{fontSize:9,color:COLORS.orange,background:COLORS.orangeFaint,border:`1px solid ${COLORS.orangeBorder}`,borderRadius:5,padding:"2px 8px",fontWeight:800}}>TODAY · 3 PICKS</span>
+                  </div>
+                </div>
+
+                <div className="mega-grid" style={{display:"grid",gap:10}}>
+                  {MEGA.map((m,i)=>{
+                    const inS = inSlip(m.id);
+                    return (
+                      <div key={m.id} className={`card-hover glowpulse fadeUp`}
+                        style={{background:`linear-gradient(135deg,rgba(255,109,0,0.08) 0%,rgba(30,20,5,0.95) 60%)`,
+                          border:`1px solid ${COLORS.orangeBorder}`,borderRadius:14,overflow:"hidden",
+                          animationDelay:`${i*0.07}s`,animationFillMode:"both"}}>
+                        <div style={{padding:"14px 16px"}}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <span>{m.flag}</span>
+                              <span style={{fontSize:10,color:COLORS.text1,fontWeight:600}}>{m.league}</span>
+                              <span style={{fontSize:9,background:COLORS.orangeFaint,color:COLORS.orange,borderRadius:4,padding:"1px 6px",fontWeight:800}}>MEGA SURE</span>
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:5}}>
+                              <span style={{fontSize:11,fontFamily:"'Barlow Condensed',sans-serif",color:COLORS.gold,fontWeight:800,background:COLORS.goldFaint,border:`1px solid ${COLORS.goldBorder}`,borderRadius:5,padding:"2px 8px"}}>{m.odds.toFixed(2)}</span>
+                              <span style={{fontSize:9,color:COLORS.gold,fontWeight:800,background:"rgba(255,215,64,0.08)",border:`1px solid ${COLORS.goldBorder}`,borderRadius:4,padding:"1px 6px"}}>{m.conf}%</span>
+                            </div>
+                          </div>
+                          <div style={{fontWeight:800,fontSize:15,marginBottom:3,lineHeight:1.3}}>{m.home} <span style={{color:COLORS.text2,fontWeight:400,fontSize:12}}>vs</span> {m.away}</div>
+                          <div style={{fontSize:10,color:COLORS.text2,marginBottom:10}}>{m.display}</div>
+                          <p style={{fontSize:12,color:COLORS.text1,lineHeight:1.75,marginBottom:10}}>{m.analysis}</p>
+                          <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:12}}>
+                            {m.tips.map((t,j)=>(
+                              <div key={j} style={{display:"flex",gap:6,fontSize:11,color:COLORS.text2}}>
+                                <span style={{color:COLORS.orange,flexShrink:0}}>›</span><span>{t}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <div style={{flex:1,background:`rgba(255,109,0,0.12)`,border:`1px solid ${COLORS.orangeBorder}`,borderRadius:8,padding:"7px 12px",textAlign:"center"}}>
+                              <div style={{fontSize:11,color:COLORS.orange,fontWeight:800}}>{m.pickLabel}</div>
+                            </div>
+                            <button className="btn" onClick={()=>addMega(m)}
+                              style={{width:40,height:36,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,
+                                background:inS?COLORS.greenFaint:COLORS.bg2,border:`1px solid ${inS?COLORS.greenBorder:COLORS.border}`,
+                                color:inS?COLORS.green:COLORS.text1}}>
+                              {inS?"✓":"+"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Add all button */}
+                <button className="btn" onClick={()=>{ MEGA.forEach(m=>{if(!inSlip(m.id))addMega(m);}); }}
+                  style={{width:"100%",marginTop:10,padding:"13px",borderRadius:12,
+                    background:`linear-gradient(90deg,${COLORS.orange},#ff8f00)`,
+                    color:"#fff",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:15,letterSpacing:"0.06em"}}>
+                  🔥 ADD ALL 3 MEGA PICKS TO SLIP
+                </button>
+              </div>
+
+              {/* Tonight preview */}
+              <div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:4,height:22,borderRadius:2,background:COLORS.blue}}/>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16}}>⭐ TONIGHT'S UCL ACTION</span>
+                  </div>
+                  <button className="btn" onClick={()=>{setCat("UCL");setPage("matches");}} style={{fontSize:11,color:COLORS.blue,fontWeight:700}}>View all →</button>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {GAMES.filter(g=>g.st==="upcoming"&&g.cat==="UCL"&&g.kick.startsWith("2026-04-07")).map(g=>(
+                    <CompactRow key={g.id} game={g} inSlip={inSlip(g.id)} onAdd={pick=>addToSlip(g,pick)} />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ─── MATCHES PAGE ──────────────────────────── */}
+          {page==="matches"&&(
+            <>
+              <div style={{fontSize:11,color:COLORS.text2,marginBottom:12,fontWeight:500}}>
+                Showing {upGames.length} upcoming {cat!=="All"?(LEAGUES_LABEL[cat]||cat):"all-league"} matches
+              </div>
+              <div className="cards-grid" style={{display:"grid",gap:12}}>
+                {upGames.map((g,i)=>(
+                  <MatchCard key={g.id} game={g} inSlip={inSlip(g.id)}
+                    expanded={expanded===g.id}
+                    onExpand={()=>setExpanded(expanded===g.id?null:g.id)}
+                    onAdd={pick=>addToSlip(g,pick)}
+                    delay={i*0.04} />
+                ))}
+                {upGames.length===0&&<EmptyState msg="No upcoming matches for this filter."/>}
+              </div>
+            </>
+          )}
+
+          {/* ─── RESULTS PAGE ──────────────────────────── */}
+          {page==="results"&&(
+            <>
+              <div style={{fontSize:11,color:COLORS.text2,marginBottom:12}}>{resGames.length} results</div>
+              <div className="cards-grid" style={{display:"grid",gap:10}}>
+                {resGames.map((g,i)=><ResultCard key={g.id} game={g} delay={i*0.04}/>)}
+                {resGames.length===0&&<EmptyState msg="No results for this filter."/>}
+              </div>
+            </>
+          )}
+
+          {/* ─── MY BETS PAGE ──────────────────────────── */}
+          {page==="mybets"&&(
+            <>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:16}}>
+                {[
+                  {label:"Win Rate",    val:winRate!==null?`${winRate}%`:"—", col:COLORS.green},
+                  {label:"Total Bets",  val:history.length,                    col:COLORS.blue},
+                  {label:"Wagered",     val:`€${totalWagered.toFixed(2)}`,     col:COLORS.text0},
+                  {label:"Returns",     val:`€${totalReturns.toFixed(2)}`,     col:totalReturns>=totalWagered?COLORS.green:COLORS.red},
+                ].map(s=>(
+                  <div key={s.label} style={{background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:13,padding:"14px 16px"}}>
+                    <div style={{fontSize:9,color:COLORS.text2,letterSpacing:"0.08em",marginBottom:6,fontWeight:700}}>{s.label.toUpperCase()}</div>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:s.col}}>{s.val}</div>
+                  </div>
+                ))}
+              </div>
+              {settled.length===0
+                ?<EmptyState msg="No bets yet. Browse matches and build your slip!"/>
+                :settled.map(e=><HistoryCard key={e.id} entry={e} open={histExp===e.id} onToggle={()=>setHistExp(histExp===e.id?null:e.id)}/>)
+              }
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ═══════════════════ BOTTOM NAV (mobile/tablet) ══════════ */}
+      <nav className="bottom-nav" style={{
+        position:"fixed",bottom:0,left:0,right:0,zIndex:70,
+        background:"rgba(7,8,16,0.98)",backdropFilter:"blur(20px)",
+        borderTop:`1px solid ${COLORS.border}`,height:60,display:"none"
+      }}>
+        {[{id:"home",icon:"🏠",label:"Home"},{id:"matches",icon:"⚽",label:"Matches"},{id:"results",icon:"📊",label:"Results"},{id:"mybets",icon:"🎫",label:"My Bets",badge:history.length}].map(n=>(
+          <button key={n.id} className="btn" onClick={()=>setPage(n.id)} style={{
+            flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+            gap:2,position:"relative",color:page===n.id?COLORS.green:COLORS.text2}}>
+            <span style={{fontSize:19,lineHeight:1}}>{n.icon}</span>
+            <span style={{fontSize:9,fontWeight:page===n.id?800:500,letterSpacing:"0.05em"}}>{n.label.toUpperCase()}</span>
+            {n.badge>0&&<span style={{position:"absolute",top:4,right:"calc(50% - 16px)",background:COLORS.red,color:"#fff",borderRadius:999,fontSize:9,fontWeight:800,minWidth:15,height:15,lineHeight:"15px",textAlign:"center",padding:"0 3px"}}>{n.badge}</span>}
+            {page===n.id&&<span style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2.5,background:COLORS.green,borderRadius:2}}/>}
+          </button>
+        ))}
+      </nav>
+
+      {/* ═══════════════════ SLIP PANEL ══════════════════════════ */}
+      {slipOpen&&<div onClick={()=>setSlipOpen(false)} style={{position:"fixed",inset:0,zIndex:148,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(5px)"}}/>}
+      <div className="slip-panel" style={{
+        position:"fixed",right:0,top:0,bottom:0,zIndex:149,
+        width:340,background:COLORS.bg1,borderLeft:`1px solid ${COLORS.border}`,
+        display:"flex",flexDirection:"column",
+        transform:slipOpen?"translateX(0)":"translateX(100%)",
+        transition:"transform .3s cubic-bezier(0.4,0,0.2,1)"
+      }}>
+        {/* Slip header */}
+        <div style={{padding:"0 16px",height:56,borderBottom:`1px solid ${COLORS.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:18,letterSpacing:"0.04em"}}>BET SLIP</span>
+            {slip.length>0&&<span style={{background:COLORS.green,color:COLORS.bg0,borderRadius:999,padding:"0 9px",fontSize:10,fontWeight:800,lineHeight:"18px"}}>{slip.length}</span>}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            {slip.length>0&&<button onClick={()=>setSlip([])} style={{fontSize:11,color:COLORS.red,fontWeight:800,letterSpacing:"0.06em"}}>CLEAR</button>}
+            <button onClick={()=>setSlipOpen(false)} style={{fontSize:24,color:COLORS.text2,lineHeight:1}}>×</button>
+          </div>
+        </div>
+
+        {/* Slip items */}
+        <div style={{flex:1,overflowY:"auto",padding:"10px 14px"}}>
+          {slip.length===0?(
+            <div style={{textAlign:"center",padding:"50px 20px",color:COLORS.text2}}>
+              <div style={{fontSize:44,marginBottom:14,opacity:.15}}>🎫</div>
+              <p style={{fontSize:13,lineHeight:1.8}}>Tap any odds button on a match to add selections</p>
+            </div>
+          ):slip.map(b=>{
+            const ret = ((parseFloat(b.stake)||0)*b.odds).toFixed(2);
+            return(
+              <div key={b.id} className="fadeUp" style={{background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                  <div style={{flex:1,paddingRight:8}}>
+                    <div style={{fontSize:10,color:COLORS.text2,marginBottom:2}}>{b.flag} {b.league}</div>
+                    <div style={{fontWeight:700,fontSize:13,lineHeight:1.3}}>{b.home} vs {b.away}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5}}>
+                      <span style={{fontSize:11,color:pickColor(b.pick),fontWeight:700}}>{pickName(b.pick)}</span>
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,color:COLORS.gold,fontWeight:800,background:COLORS.goldFaint,border:`1px solid ${COLORS.goldBorder}`,borderRadius:4,padding:"1px 7px"}}>{b.odds.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <button onClick={()=>removeSlip(b.id)} style={{color:COLORS.text2,fontSize:20,lineHeight:1,flexShrink:0}}>×</button>
+                </div>
+                <div style={{fontSize:9,color:COLORS.text2,marginBottom:5,fontWeight:700,letterSpacing:"0.08em"}}>STAKE (€)</div>
+                <div style={{display:"flex",gap:6,marginBottom:6}}>
+                  <input type="number" min=".5" step=".5" value={b.stake} onChange={e=>updateStake(b.id,e.target.value)}
+                    style={{flex:1,background:COLORS.bg0,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:"8px 10px",color:COLORS.text0,fontSize:14,outline:"none"}}/>
+                  <div style={{background:COLORS.greenFaint,border:`1px solid ${COLORS.greenBorder}`,borderRadius:8,padding:"8px 10px",fontSize:13,color:COLORS.green,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,flexShrink:0}}>€{ret}</div>
+                </div>
+                <div style={{display:"flex",gap:4}}>
+                  {[5,10,25,50].map(a=>(
+                    <button key={a} className="btn" onClick={()=>updateStake(b.id,String(a))} style={{flex:1,padding:"5px 0",borderRadius:7,fontSize:11,fontWeight:700,
+                      background:b.stake===String(a)?COLORS.greenFaint:COLORS.bg3,border:`1px solid ${b.stake===String(a)?COLORS.greenBorder:COLORS.border}`,
+                      color:b.stake===String(a)?COLORS.green:COLORS.text2}}>€{a}</button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Slip footer */}
+        {slip.length>0&&(
+          <div style={{borderTop:`1px solid ${COLORS.border}`,padding:"14px 16px",flexShrink:0}}>
+            <div style={{background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:11,padding:"12px 14px",marginBottom:12}}>
+              {slip.length>1&&(
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                  <span style={{fontSize:12,color:COLORS.text1}}>Accumulator odds</span>
+                  <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:14,color:COLORS.gold,fontWeight:800}}>{accumOdds.toFixed(2)}×</span>
+                </div>
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:12,color:COLORS.text1}}>Total stake</span>
+                <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13}}>{`€${totalStake.toFixed(2)}`}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:12,color:COLORS.text1}}>Balance after</span>
+                <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,color:totalStake>balance?COLORS.red:COLORS.text1}}>€{(balance-totalStake).toFixed(2)}</span>
+              </div>
+              <div style={{borderTop:`1px solid ${COLORS.border}`,paddingTop:8,display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontSize:14,fontWeight:700}}>Potential return</span>
+                <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:900,color:COLORS.green}}>€{potReturn.toFixed(2)}</span>
+              </div>
+            </div>
+            {totalStake>balance&&<div style={{textAlign:"center",color:COLORS.red,fontSize:11,fontWeight:700,marginBottom:8}}>⚠ Stake exceeds available balance</div>}
+            <button className="btn" onClick={placeBets} disabled={placing||totalStake>balance||totalStake<=0}
+              style={{width:"100%",padding:"14px",borderRadius:11,
+                background:placing||totalStake>balance?"#1a2a18":`linear-gradient(90deg,${COLORS.green},${COLORS.greenD})`,
+                color:placing||totalStake>balance?COLORS.text2:COLORS.bg0,
+                fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:16,letterSpacing:"0.06em",
+                display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              {placing?<><span className="spin">◌</span> Placing bets...</>:`PLACE ${slip.length} BET${slip.length>1?"S":""}`}
+            </button>
+            <p style={{fontSize:10,color:COLORS.text2,textAlign:"center",marginTop:8,lineHeight:1.6}}>18+ · Bet Responsibly · AI predictions only</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function GameCard({ game, inSlip, expanded, onToggle, onAddToSlip }) {
-  const badge = confBadge(game.confidence);
-  const pred = PRED_LABELS[game.prediction];
-
+/* ── COMPACT ROW (home preview) ──────────────────────────────── */
+function CompactRow({game,inSlip,onAdd}) {
+  const cm = confMeta(game.conf);
+  const ai = oddsFor(game,game.pick);
   return (
-    <div style={{
-      background: "#111113", border: `1px solid ${inSlip ? "rgba(52,211,153,0.35)" : "#27272a"}`,
-      borderRadius: 12, overflow: "hidden", transition: "all 0.2s",
-      boxShadow: inSlip ? "0 0 0 1px rgba(52,211,153,0.12)" : "none",
-    }}>
-      <div style={{ padding: "12px 14px 0" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ fontSize: 11 }}>{LEAGUE_FLAGS[game.league]}</span>
-            <span style={{ fontSize: 10, color: "#71717a", letterSpacing: "0.07em" }}>{game.league}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 9, color: badge.color, background: `${badge.color}18`, border: `1px solid ${badge.color}30`, borderRadius: 4, padding: "2px 6px", fontWeight: 700 }}>{badge.label}</span>
-            <span style={{ fontSize: 10, color: "#52525b", fontFamily: "monospace" }}>{game.localTime}</span>
-          </div>
+    <div className="card-hover fadeUp" style={{background:COLORS.bg2,border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`,borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:10,color:COLORS.text2,marginBottom:4,display:"flex",alignItems:"center",gap:5}}>
+          <span>{game.flag}</span><span>{game.league}</span><span>·</span><span>{game.display}</span>
         </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 6, alignItems: "center", marginBottom: 12 }}>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#f4f4f5" }}>{game.homeTeam}</div>
-            <div style={{ fontSize: 9, color: "#52525b", marginTop: 2 }}>HOME</div>
-          </div>
-          <div style={{ textAlign: "center", padding: "4px 8px", background: "#18181b", borderRadius: 5, fontSize: 10, color: "#52525b", letterSpacing: "0.06em" }}>VS</div>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 13, color: "#a1a1aa" }}>{game.awayTeam}</div>
-            <div style={{ fontSize: 9, color: "#52525b", marginTop: 2 }}>AWAY</div>
-          </div>
+        <div style={{fontWeight:700,fontSize:13}}>{game.home} <span style={{color:COLORS.text2,fontWeight:400,fontSize:11}}>vs</span> {game.away}</div>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+          <span style={{fontSize:10,color:pickColor(game.pick),fontWeight:700}}>{pickName(game.pick)}</span>
+          <span style={{fontSize:9,color:cm.c,background:cm.bg,border:`1px solid ${cm.bc}`,borderRadius:4,padding:"1px 6px",fontWeight:700}}>{cm.label} {game.conf}%</span>
         </div>
+      </div>
+      <button className="btn" onClick={()=>onAdd(game.pick)}
+        style={{display:"flex",alignItems:"center",gap:5,padding:"8px 12px",borderRadius:9,flexShrink:0,
+          background:inSlip?COLORS.greenFaint:COLORS.bg3,border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`,
+          color:inSlip?COLORS.green:COLORS.text1,fontSize:11,fontWeight:700}}>
+        {inSlip?"✓ ADDED":`+ ${ai.toFixed(2)}`}
+      </button>
+    </div>
+  );
+}
 
-        {/* Win prob bar */}
-        {game.winProb && (
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ display: "flex", borderRadius: 4, overflow: "hidden", height: 5 }}>
-              <div style={{ width: `${game.winProb.home}%`, background: "#60a5fa" }} />
-              <div style={{ width: `${game.winProb.draw}%`, background: "#fbbf24" }} />
-              <div style={{ width: `${game.winProb.away}%`, background: "#f87171" }} />
+/* ── FULL MATCH CARD ─────────────────────────────────────────── */
+function MatchCard({game,inSlip,expanded,onExpand,onAdd,delay=0}) {
+  const cm = confMeta(game.conf);
+  const tonight = new Date(game.kick).toDateString()===new Date().toDateString();
+  return (
+    <div className="card-hover fadeUp" style={{background:COLORS.bg1,border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`,borderRadius:15,overflow:"hidden",animationDelay:`${delay}s`,animationFillMode:"both",boxShadow:inSlip?"0 0 0 1px rgba(0,230,118,0.1)":"none"}}>
+      <div style={{padding:"14px 16px 0"}}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:14}}>{game.flag}</span>
+            <div>
+              <div style={{fontSize:10,color:COLORS.text1,fontWeight:600}}>{game.league}</div>
+              <div style={{fontSize:9,color:COLORS.text2}}>{game.round}</div>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3, fontSize: 9, color: "#52525b" }}>
-              <span style={{ color: "#60a5fa" }}>{game.winProb.home}%</span>
-              <span style={{ color: "#fbbf24" }}>Draw {game.winProb.draw}%</span>
-              <span style={{ color: "#f87171" }}>{game.winProb.away}%</span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:5}}>
+            {tonight&&<span className="pulse" style={{fontSize:9,color:COLORS.red,background:COLORS.redFaint,border:"1px solid rgba(255,82,82,0.25)",borderRadius:4,padding:"2px 6px",fontWeight:800}}>TONIGHT</span>}
+            <span style={{fontSize:9,color:cm.c,background:cm.bg,border:`1px solid ${cm.bc}`,borderRadius:5,padding:"2px 7px",fontWeight:800}}>{cm.label} {game.conf}%</span>
+          </div>
+        </div>
+
+        {/* Kickoff */}
+        <div style={{textAlign:"center",fontSize:11,color:COLORS.text2,background:COLORS.bg2,borderRadius:7,padding:"4px",marginBottom:10,fontFamily:"monospace",letterSpacing:"0.04em"}}>{game.display}</div>
+
+        {/* Teams */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 44px 1fr",gap:6,alignItems:"center",marginBottom:10}}>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontWeight:800,fontSize:14,lineHeight:1.2}}>{game.home}</div>
+            <div style={{fontSize:9,color:COLORS.text2,marginTop:2,letterSpacing:"0.06em"}}>HOME</div>
+          </div>
+          <div style={{textAlign:"center",background:COLORS.bg2,border:`1px solid ${COLORS.border}`,borderRadius:9,padding:"7px 0"}}>
+            <div style={{fontSize:10,color:COLORS.text2,fontWeight:700}}>VS</div>
+          </div>
+          <div>
+            <div style={{fontWeight:600,fontSize:14,lineHeight:1.2,color:COLORS.text1}}>{game.away}</div>
+            <div style={{fontSize:9,color:COLORS.text2,marginTop:2,letterSpacing:"0.06em"}}>AWAY</div>
+          </div>
+        </div>
+
+        {/* Prob bar */}
+        {game.prob&&(
+          <div style={{marginBottom:10}}>
+            <div style={{height:5,borderRadius:99,display:"flex",overflow:"hidden",gap:1.5}}>
+              <div style={{flex:game.prob.h,background:COLORS.blue,borderRadius:"99px 0 0 99px"}}/>
+              <div style={{flex:game.prob.d,background:COLORS.gold}}/>
+              <div style={{flex:game.prob.a,background:COLORS.purple,borderRadius:"0 99px 99px 0"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:9,fontWeight:700}}>
+              <span style={{color:COLORS.blue}}>{game.prob.h}%</span>
+              <span style={{color:COLORS.gold}}>Draw {game.prob.d}%</span>
+              <span style={{color:COLORS.purple}}>{game.prob.a}%</span>
             </div>
           </div>
         )}
 
-        {/* Odds buttons */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 5, marginBottom: 10 }}>
+        {/* Odds */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
           {[
-            { label: "1", sublabel: "Home", val: game.odds.home, pick: "home_win", color: "#60a5fa" },
-            { label: "X", sublabel: "Draw", val: game.odds.draw, pick: "draw", color: "#fbbf24" },
-            { label: "2", sublabel: "Away", val: game.odds.away, pick: "away_win", color: "#f87171" },
-          ].map(o => {
-            const isAI = game.prediction === o.pick;
-            return (
-              <button key={o.label} onClick={() => onAddToSlip(o.pick)} style={{
-                padding: "7px 5px", borderRadius: 7,
-                border: `1px solid ${isAI ? `${o.color}60` : "#27272a"}`,
-                background: isAI ? `${o.color}12` : "#18181b",
-                cursor: "pointer", textAlign: "center", transition: "all 0.15s",
-              }}>
-                <div style={{ fontSize: 9, color: isAI ? o.color : "#52525b", letterSpacing: "0.05em", marginBottom: 2 }}>{o.label}</div>
-                <div style={{ fontSize: 14, fontFamily: "monospace", fontWeight: 700, color: isAI ? o.color : "#d4d4d8" }}>{o.val.toFixed(2)}</div>
-                {isAI && <div style={{ fontSize: 8, color: o.color, marginTop: 2 }}>AI ✓</div>}
+            {label:"1",sub:"Home",pick:"home_win",val:game.odds.h,col:COLORS.blue},
+            {label:"X",sub:"Draw",pick:"draw",    val:game.odds.d,col:COLORS.gold},
+            {label:"2",sub:"Away",pick:"away_win", val:game.odds.a,col:COLORS.purple},
+          ].map(o=>{
+            const isAI = game.pick===o.pick;
+            return(
+              <button key={o.label} className="btn odds-hover" onClick={()=>onAdd(o.pick)}
+                style={{padding:"9px 5px",borderRadius:10,textAlign:"center",
+                  border:`1px solid ${isAI?`${o.col}55`:COLORS.border}`,
+                  background:isAI?`${o.col}0f`:COLORS.bg2,transition:"all .15s"}}>
+                <div style={{fontSize:9,color:isAI?o.col:COLORS.text2,fontWeight:800,letterSpacing:"0.06em",marginBottom:2}}>{o.label}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:17,color:isAI?o.col:COLORS.text0}}>{o.val.toFixed(2)}</div>
+                {isAI&&<div style={{fontSize:8,color:o.col,fontWeight:800,marginTop:2}}>AI PICK ✓</div>}
               </button>
             );
           })}
         </div>
 
-        {/* Confidence bar */}
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-            <span style={{ fontSize: 9, color: "#52525b", letterSpacing: "0.06em" }}>AI CONFIDENCE</span>
-            <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: badge.color }}>{game.confidence}%</span>
+        {/* AI badge */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:COLORS.greenFaint,border:`1px solid ${COLORS.greenBorder}`,borderRadius:9,padding:"8px 12px",marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <span style={{width:7,height:7,borderRadius:"50%",background:pickColor(game.pick),flexShrink:0}}/>
+            <span style={{fontSize:12,fontWeight:700,color:COLORS.green}}>AI: {pickName(game.pick)}</span>
           </div>
-          <div style={{ height: 3, background: "#27272a", borderRadius: 99, overflow: "hidden" }}>
-            <div style={{ width: `${game.confidence}%`, height: "100%", background: badge.color, transition: "width 0.5s ease" }} />
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:14,color:COLORS.gold,fontWeight:800,background:COLORS.goldFaint,border:`1px solid ${COLORS.goldBorder}`,borderRadius:5,padding:"1px 8px"}}>{oddsFor(game,game.pick).toFixed(2)}</span>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,color:cm.c,fontWeight:800}}>{game.conf}%</span>
+          </div>
+        </div>
+
+        {/* Conf bar */}
+        <div style={{marginBottom:10}}>
+          <div style={{height:3,background:COLORS.bg3,borderRadius:99,overflow:"hidden"}}>
+            <div style={{width:`${game.conf}%`,height:"100%",background:cm.c,borderRadius:99,transition:"width .5s ease"}}/>
           </div>
         </div>
       </div>
 
-      <div style={{ display: "flex", borderTop: "1px solid #27272a" }}>
-        <button onClick={() => onAddToSlip(game.prediction)} style={{
-          flex: 1, padding: "8px 12px", background: inSlip ? "rgba(52,211,153,0.07)" : "transparent",
-          border: "none", borderRight: "1px solid #27272a", cursor: "pointer", fontSize: 10,
-          fontWeight: 700, letterSpacing: "0.06em", color: inSlip ? "#34d399" : "#71717a", transition: "all 0.15s",
-        }}>
-          {inSlip ? "✓ IN SLIP" : "+ ADD TO SLIP"}
+      {/* Action row */}
+      <div style={{display:"flex",borderTop:`1px solid ${COLORS.border}`}}>
+        <button className="btn" onClick={()=>onAdd(game.pick)}
+          style={{flex:1,padding:"11px 14px",background:inSlip?COLORS.greenFaint:"transparent",borderRight:`1px solid ${COLORS.border}`,fontSize:11,fontWeight:800,letterSpacing:"0.07em",color:inSlip?COLORS.green:COLORS.text2}}>
+          {inSlip?"✓ IN SLIP":"+ ADD TO SLIP"}
         </button>
-        <button onClick={onToggle} style={{
-          padding: "8px 12px", background: "transparent", border: "none", cursor: "pointer",
-          fontSize: 10, color: "#52525b", transition: "all 0.15s",
-        }}>
-          {expanded ? "▲" : "▼"} INFO
+        <button className="btn" onClick={onExpand}
+          style={{padding:"11px 14px",fontSize:10,color:COLORS.text2,fontWeight:700,letterSpacing:"0.06em",display:"flex",alignItems:"center",gap:4}}>
+          {expanded?"▲":"▼"} ANALYSIS
         </button>
       </div>
 
-      {expanded && game.aiAnalysis && (
-        <div style={{ padding: "12px 14px", borderTop: "1px solid #27272a", background: "rgba(0,0,0,0.2)" }}>
-          <p style={{ fontSize: 11, color: "#a1a1aa", lineHeight: 1.7, marginBottom: 8 }}>{game.aiAnalysis}</p>
-          {game.tips && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {game.tips.map((t, i) => (
-                <div key={i} style={{ display: "flex", gap: 6, fontSize: 11, color: "#71717a" }}>
-                  <span style={{ color: "#34d399", flexShrink: 0 }}>›</span><span>{t}</span>
+      {/* Analysis */}
+      {expanded&&(
+        <div style={{padding:"12px 16px",borderTop:`1px solid ${COLORS.border}`,background:COLORS.bg0}}>
+          {game.tips?.map((t,i)=>(
+            <div key={i} style={{display:"flex",gap:7,fontSize:11,color:COLORS.text1,marginBottom:7,lineHeight:1.65}}>
+              <span style={{color:COLORS.green,flexShrink:0,marginTop:1}}>›</span><span>{t}</span>
+            </div>
+          ))}
+          {game.h2h&&(
+            <div style={{marginTop:8,padding:"8px 10px",background:COLORS.bg2,borderRadius:8,fontSize:11,color:COLORS.text2}}>
+              <span style={{color:COLORS.gold,fontWeight:700}}>H2H: </span>{game.h2h}
+            </div>
+          )}
+          {game.form&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
+              {[{label:`${game.home} Form`,v:game.form.h},{label:`${game.away} Form`,v:game.form.a}].map(f=>(
+                <div key={f.label} style={{background:COLORS.bg2,borderRadius:9,padding:"9px 10px"}}>
+                  <div style={{fontSize:9,color:COLORS.text2,marginBottom:5,fontWeight:700,letterSpacing:"0.06em"}}>{f.label.toUpperCase()}</div>
+                  <div style={{display:"flex",gap:3}}>
+                    {f.v.split("").map((c,i)=>{
+                      const col=c==="W"?COLORS.green:c==="D"?COLORS.gold:COLORS.red;
+                      return <span key={i} style={{width:19,height:19,borderRadius:5,background:`${col}18`,color:col,fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{c}</span>;
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
@@ -639,51 +1136,91 @@ function GameCard({ game, inSlip, expanded, onToggle, onAddToSlip }) {
   );
 }
 
-function ResultCard({ game }) {
-  const { home, away } = game.score || { home: 0, away: 0 };
-  const homeWon = home > away;
-  const awayWon = away > home;
-  const isDraw = home === away;
-
+/* ── RESULT CARD ─────────────────────────────────────────────── */
+function ResultCard({game,delay=0}) {
+  const hW=game.score.h>game.score.a, aW=game.score.a>game.score.h, dr=game.score.h===game.score.a;
+  const correct = didWin(game,game.pick);
   return (
-    <div style={{ background: "#111113", border: "1px solid #27272a", borderRadius: 12, padding: "12px 14px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span>{LEAGUE_FLAGS[game.league]}</span>
-          <span style={{ fontSize: 10, color: "#71717a" }}>{game.league}</span>
-        </div>
-        <span style={{ fontSize: 9, color: "#52525b", fontFamily: "monospace" }}>{game.localTime}</span>
+    <div className="card-hover fadeUp" style={{background:COLORS.bg1,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:"14px 16px",animationDelay:`${delay}s`,animationFillMode:"both"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <span style={{fontSize:10,color:COLORS.text2,display:"flex",alignItems:"center",gap:5}}><span>{game.flag}</span><span>{game.league}</span><span>·</span><span>{game.round}</span></span>
+        <span style={{fontSize:10,color:COLORS.text2,fontFamily:"monospace"}}>{game.display}</span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, alignItems: "center" }}>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontWeight: homeWon ? 800 : 500, fontSize: 13, color: homeWon ? "#f4f4f5" : "#71717a" }}>{game.homeTeam}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:10,alignItems:"center",marginBottom:10}}>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontWeight:hW?800:500,fontSize:14,color:hW?COLORS.text0:COLORS.text2}}>{game.home}</div>
         </div>
-        <div style={{ textAlign: "center", padding: "6px 10px", background: "#18181b", borderRadius: 6 }}>
-          <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 16, color: isDraw ? "#fbbf24" : "#f4f4f5" }}>{home} – {away}</div>
-          <div style={{ fontSize: 8, color: "#52525b", letterSpacing: "0.06em", marginTop: 2 }}>FT</div>
+        <div style={{textAlign:"center",background:dr?COLORS.goldFaint:COLORS.bg2,border:`1px solid ${dr?COLORS.goldBorder:COLORS.border}`,borderRadius:10,padding:"7px 14px",minWidth:68}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:20,color:dr?COLORS.gold:COLORS.text0}}>{game.score.h}–{game.score.a}</div>
+          <div style={{fontSize:8,color:COLORS.text2,letterSpacing:"0.1em",fontWeight:700}}>FT</div>
         </div>
         <div>
-          <div style={{ fontWeight: awayWon ? 800 : 500, fontSize: 13, color: awayWon ? "#f4f4f5" : "#71717a" }}>{game.awayTeam}</div>
+          <div style={{fontWeight:aW?800:500,fontSize:14,color:aW?COLORS.text0:COLORS.text2}}>{game.away}</div>
         </div>
       </div>
-      {game.prediction && (
-        <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 8px", background: "#18181b", borderRadius: 6 }}>
-          <span style={{ fontSize: 10, color: "#52525b" }}>AI predicted: <span style={{ color: calcOddsColor(game.prediction) }}>{PRED_LABELS[game.prediction]?.long}</span></span>
-          {(() => {
-            const won = didWin(game, game.prediction);
-            return <span style={{ fontSize: 11, fontWeight: 700, color: won ? "#34d399" : "#f87171" }}>{won ? "✓ Correct" : "✗ Wrong"}</span>;
-          })()}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",borderRadius:8,
+        background:correct?COLORS.greenFaint:COLORS.redFaint,border:`1px solid ${correct?COLORS.greenBorder:"rgba(255,82,82,0.15)"}`}}>
+        <span style={{fontSize:10,color:COLORS.text2}}>
+          AI: <span style={{color:pickColor(game.pick),fontWeight:700}}>{pickName(game.pick)}</span>
+          <span style={{color:COLORS.text2}}> @ {oddsFor(game,game.pick).toFixed(2)}</span>
+        </span>
+        <span style={{fontSize:11,fontWeight:800,color:correct?COLORS.green:COLORS.red}}>{correct?"✓ Correct":"✗ Wrong"}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── HISTORY CARD ────────────────────────────────────────────── */
+function HistoryCard({entry,open,onToggle}) {
+  const sc=entry.status==="won"?COLORS.green:entry.status==="lost"?COLORS.red:COLORS.gold;
+  return (
+    <div className="fadeUp" style={{background:COLORS.bg1,border:`1px solid ${entry.status==="won"?COLORS.greenBorder:entry.status==="lost"?"rgba(255,82,82,0.2)":COLORS.border}`,borderRadius:13,overflow:"hidden",marginBottom:8}}>
+      <div onClick={onToggle} style={{padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,cursor:"pointer"}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:10,color:COLORS.text2,marginBottom:3}}>{new Date(entry.placedAt).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div>
+          <div style={{fontSize:13,fontWeight:700}}>
+            {entry.bets.length} selection{entry.bets.length>1?"s":""}
+            {entry.bets.length>1&&<span style={{fontSize:11,color:COLORS.text2,fontWeight:400}}> · {entry.accumOdds}×</span>}
+          </div>
+        </div>
+        <div style={{textAlign:"right",flexShrink:0}}>
+          <div style={{fontSize:11,color:COLORS.text2}}>€{entry.totalStake.toFixed(2)} → <span style={{color:sc,fontWeight:700}}>€{entry.potReturn.toFixed(2)}</span></div>
+        </div>
+        <div style={{padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:800,letterSpacing:"0.06em",background:`${sc}14`,color:sc,border:`1px solid ${sc}30`,flexShrink:0}}>{entry.status.toUpperCase()}</div>
+        <span style={{fontSize:10,color:COLORS.text2,flexShrink:0}}>{open?"▲":"▼"}</span>
+      </div>
+      {open&&(
+        <div style={{borderTop:`1px solid ${COLORS.border}`,padding:"10px 16px",background:COLORS.bg0}}>
+          {entry.bets.map((b,i)=>{
+            const rc=b.result==="won"?COLORS.green:b.result==="lost"?COLORS.red:COLORS.gold;
+            return(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:8,paddingBottom:8,marginBottom:i<entry.bets.length-1?8:0,borderBottom:i<entry.bets.length-1?`1px solid ${COLORS.border}`:"none"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:10,color:COLORS.text2}}>{b.flag} {b.league}</div>
+                  <div style={{fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.home} vs {b.away}</div>
+                  <div style={{fontSize:11,color:pickColor(b.pick),fontWeight:700,marginTop:2}}>{pickName(b.pick)}</div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,color:COLORS.gold,fontWeight:800}}>{b.odds.toFixed(2)}×</div>
+                  {b.score&&<div style={{fontSize:10,color:COLORS.text2}}>{b.score.h}–{b.score.a}</div>}
+                </div>
+                <div style={{width:22,textAlign:"center",flexShrink:0,fontSize:b.result==="pending"?13:16,color:rc}}>
+                  {b.result==="pending"?<span style={{animation:"pulse 1.8s ease infinite",display:"inline-block"}}>⏳</span>:b.result==="won"?"✓":"✗"}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-function EmptyState({ msg }) {
-  return (
-    <div style={{ textAlign: "center", padding: "60px 20px", color: "#52525b", gridColumn: "1/-1" }}>
-      <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>◈</div>
-      <p style={{ fontSize: 13, lineHeight: 1.7 }}>{msg}</p>
+function EmptyState({msg}) {
+  return(
+    <div style={{textAlign:"center",padding:"70px 20px",gridColumn:"1/-1"}}>
+      <div style={{fontSize:44,opacity:.08,marginBottom:14}}>⚽</div>
+      <p style={{fontSize:13,color:COLORS.text2,lineHeight:1.8,maxWidth:300,margin:"0 auto"}}>{msg}</p>
     </div>
   );
 }
