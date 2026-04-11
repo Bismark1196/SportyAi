@@ -1,66 +1,61 @@
 // lib/useLiveScores.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// Custom React hook that connects to /api/live-scores (SSE) and exposes:
-//   scores      — array of LiveFixture objects, keyed by fixture id
-//   connected   — whether the EventSource is open
-//   hasLive     — whether any game is currently in-progress
-//   lastUpdated — timestamp of last successful update
-//   source      — 'api-football' | 'football-data.org' | 'mock'
-//
-// The hook auto-reconnects on network errors (browser EventSource handles this).
-// It also deduplicates updates: the state only changes when data actually differs.
-// ─────────────────────────────────────────────────────────────────────────────
+// React hook that connects to /api/live-scores (SSE) and returns
+// real-time score data merged into a map keyed by fixture ID.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-export interface LiveFixture {
-  id: string;
-  league: string;
-  flag: string;
-  home: string;
-  away: string;
-  homeScore: number | null;
-  awayScore: number | null;
-  minute: number | null;
-  statusCode: string;       // 'NS', '1H', 'HT', '2H', 'ET', 'FT', 'AET', 'PEN'
-  statusLabel: string;      // "67'", "HT", "FT", "19:30"
-  kickoffISO: string;
-  isLive: boolean;
-  isFinished: boolean;
+export interface LiveScore {
+  fixtureId:   number;
+  homeTeam:    string;
+  awayTeam:    string;
+  league:      string;
+  flag:        string;
+  kickoff:     string;
+  statusShort: string;   // NS | 1H | HT | 2H | ET | P | FT | AET | PEN
+  statusLong:  string;
+  elapsed:     number | null;
+  homeScore:   number | null;
+  awayScore:   number | null;
+  homeEvents:  { minute: number; type: string; player: string }[];
+  awayEvents:  { minute: number; type: string; player: string }[];
 }
 
-export interface LiveScoresState {
-  /** Map from fixture id → LiveFixture for O(1) lookup in the dashboard */
-  scoresById: Record<string, LiveFixture>;
-  /** Ordered array (live first, then scheduled, then finished) */
-  scores: LiveFixture[];
-  connected: boolean;
-  hasLive: boolean;
-  lastUpdated: number | null;
-  source: string | null;
+// Statuses that count as "live"
+const LIVE_STATUSES = new Set(['1H', '2H', 'HT', 'ET', 'P', 'BT']);
+// Statuses that count as "finished"
+const DONE_STATUSES = new Set(['FT', 'AET', 'PEN']);
+
+export function getScoreStatus(score: LiveScore): 'upcoming' | 'live' | 'halftime' | 'finished' {
+  if (DONE_STATUSES.has(score.statusShort)) return 'finished';
+  if (score.statusShort === 'HT') return 'halftime';
+  if (LIVE_STATUSES.has(score.statusShort)) return 'live';
+  return 'upcoming';
 }
 
-function sortFixtures(fixtures: LiveFixture[]): LiveFixture[] {
-  const order = (f: LiveFixture) =>
-    f.isLive ? 0 : !f.isFinished ? 1 : 2;
-  return [...fixtures].sort((a, b) => order(a) - order(b));
+export function formatMinute(score: LiveScore): string {
+  if (score.statusShort === 'HT') return 'HT';
+  if (score.elapsed !== null) return `${score.elapsed}'`;
+  return '';
 }
 
-export function useLiveScores(): LiveScoresState {
-  const [state, setState] = useState<LiveScoresState>({
-    scoresById: {} as Record<string, LiveFixture>,
-    scores: [],
-    connected: false,
-    hasLive: false,
-    lastUpdated: null,
-    source: null,
-  });
+interface UseLiveScoresReturn {
+  scores:      LiveScore[];          // all today's fixtures
+  scoreMap:    Map<string, LiveScore>; // keyed by "HomeTeam|AwayTeam" (lowercased)
+  connected:   boolean;
+  lastUpdated: Date | null;
+  liveCount:   number;               // how many games currently live
+}
 
-  const esRef  = useRef<EventSource | null>(null);
-  const prevRef = useRef<string>(''); // JSON snapshot for dedup
+export function useLiveScores(): UseLiveScoresReturn {
+  const [scores, setScores]         = useState<LiveScore[]>([]);
+  const [connected, setConnected]   = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const esRef = useRef<EventSource | null>(null);
+  const retryRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCount = useRef(0);
 
   const connect = useCallback(() => {
-    // Close existing connection
+    // Clean up any existing connection
     if (esRef.current) {
       esRef.current.close();
       esRef.current = null;
@@ -70,42 +65,29 @@ export function useLiveScores(): LiveScoresState {
     esRef.current = es;
 
     es.onopen = () => {
-      setState(s => ({ ...s, connected: true }));
+      setConnected(true);
+      retryCount.current = 0;
     };
 
     es.onmessage = (e) => {
       try {
-        const msg = JSON.parse(e.data);
-
-        if (msg.type === 'live') {
-          const fixtures: LiveFixture[] = msg.payload || [];
-          const snapshot = JSON.stringify(fixtures);
-
-          // Skip re-render if nothing changed
-          if (snapshot === prevRef.current) return;
-          prevRef.current = snapshot;
-
-          const sorted = sortFixtures(fixtures);
-          const byId: Record<string, LiveFixture> = {};
-          for (const f of fixtures) byId[f.id] = f;
-
-          setState({
-            scoresById:  byId,
-            scores:      sorted,
-            connected:   true,
-            hasLive:     msg.hasLive ?? false,
-            lastUpdated: Date.now(),
-            source:      msg.source ?? null,
-          });
+        const msg = JSON.parse(e.data) as { type: string; payload: unknown };
+        if (msg.type === 'scores') {
+          setScores(msg.payload as LiveScore[]);
+          setLastUpdated(new Date());
         }
-      } catch {
-        // malformed message — ignore
-      }
+      } catch { /* malformed message */ }
     };
 
     es.onerror = () => {
-      setState(s => ({ ...s, connected: false }));
-      // EventSource auto-reconnects after ~3s — no manual retry needed
+      setConnected(false);
+      es.close();
+      esRef.current = null;
+
+      // Exponential backoff: 2s, 4s, 8s … max 60s
+      const delay = Math.min(2000 * Math.pow(2, retryCount.current), 60_000);
+      retryCount.current++;
+      retryRef.current = setTimeout(connect, delay);
     };
   }, []);
 
@@ -113,64 +95,21 @@ export function useLiveScores(): LiveScoresState {
     connect();
     return () => {
       esRef.current?.close();
-      esRef.current = null;
+      if (retryRef.current) clearTimeout(retryRef.current);
     };
   }, [connect]);
 
-  return state;
-}
-
-// ── Utility: merge live score into a dashboard game object ──────────────────
-// Pass a GAMES[] entry and the scoresById map to get enriched data back.
-export function mergeLiveScore<T extends {
-  id: string;
-  home?: string;
-  away?: string;
-  homeTeam?: string;
-  awayTeam?: string;
-}>(
-  game: T,
-  scoresById: Record<string, LiveFixture>
-): T & {
-  liveScore:      { h: number; a: number } | null;
-  liveMinute:     number | null;
-  liveStatusCode: string | null;
-  liveStatusLabel: string | null;
-  isLive:         boolean;
-  isFinished:     boolean;
-} {
-  // Try to match by id first, then by team names
-  let live: LiveFixture | undefined = scoresById[game.id];
-
-  if (!live) {
-    const home = (game.home || game.homeTeam || '').toLowerCase();
-    const away = (game.away || game.awayTeam || '').toLowerCase();
-    live = Object.values(scoresById).find(
-      f => f.home.toLowerCase() === home && f.away.toLowerCase() === away
-    );
+  // Build a lookup map: "hometeam|awayteam" → LiveScore
+  const scoreMap = new Map<string, LiveScore>();
+  for (const s of scores) {
+    const key = `${s.homeTeam.toLowerCase()}|${s.awayTeam.toLowerCase()}`;
+    scoreMap.set(key, s);
+    // Also index by reversed names in case home/away flipped
+    const altKey = `${s.awayTeam.toLowerCase()}|${s.homeTeam.toLowerCase()}`;
+    if (!scoreMap.has(altKey)) scoreMap.set(altKey, s);
   }
 
-  if (!live) {
-    return {
-      ...game,
-      liveScore:       null,
-      liveMinute:      null,
-      liveStatusCode:  null,
-      liveStatusLabel: null,
-      isLive:          false,
-      isFinished:      false,
-    };
-  }
+  const liveCount = scores.filter(s => LIVE_STATUSES.has(s.statusShort)).length;
 
-  return {
-    ...game,
-    liveScore:       live.homeScore !== null && live.awayScore !== null
-                       ? { h: live.homeScore, a: live.awayScore }
-                       : null,
-    liveMinute:      live.minute,
-    liveStatusCode:  live.statusCode,
-    liveStatusLabel: live.statusLabel,
-    isLive:          live.isLive,
-    isFinished:      live.isFinished,
-  };
+  return { scores, scoreMap, connected, lastUpdated, liveCount };
 }
