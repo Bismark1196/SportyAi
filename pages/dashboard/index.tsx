@@ -349,6 +349,8 @@ export default function App() {
 
   // Determine if a game can be added to slip (upcoming only)
   const isGameBettable = (g: any): boolean => {
+    // Already a stored result — never bettable
+    if (g.st === "result") return false;
     const live = getLive(g.home, g.away);
     if (live) {
       const st = getScoreStatus(live);
@@ -362,6 +364,42 @@ export default function App() {
   };
 
   useEffect(() => { persist.save({balance, slip, history}); }, [balance, slip, history]);
+
+  // ── AUTO-SETTLE: check history against result games, credit balance ──────
+  useEffect(() => {
+    let changed = false;
+    const updated = history.map(e => {
+      if (e.status === "won" || e.status === "lost") return e; // already settled
+      const bets = e.bets.map(b => {
+        if (b.result === "won" || b.result === "lost") return b;
+        const g = GAMES.find(x => x.id === b.id);
+        if (!g?.score) return b;
+        const won = didWin(g, b.pick);
+        return {...b, result: won ? "won" : "lost", score: g.score};
+      });
+      const allSettled = bets.every(b => b.result === "won" || b.result === "lost");
+      if (!allSettled) return {...e, bets};
+      const allWon = bets.every(b => b.result === "won");
+      const newStatus = allWon ? "won" : "lost";
+      if (newStatus !== e.status) {
+        changed = true;
+        if (newStatus === "won") {
+          // Credit winnings to balance
+          setBalance(prev => +(prev + e.potReturn).toFixed(2));
+          toast$(`🏆 Bet won! +€${e.potReturn.toFixed(2)} added to balance`, "ok");
+        }
+      }
+      return {...e, bets, status: newStatus};
+    });
+    if (changed) setHistory(updated);
+  }, [history]); // re-run whenever history changes
+
+  // ── LIVE CLOCK: re-render every 30s while any game could be live ──────────
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const toast$ = (msg, type="ok") => {
     setToast({msg, type});
@@ -1700,37 +1738,103 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0})
 
 /* ── RESULT CARD ─────────────────────────────────────────────── */
 function ResultCard({game, delay=0}) {
-  const hW = game.score.h > game.score.a;
-  const aW = game.score.a > game.score.h;
-  const dr = game.score.h === game.score.a;
+  const hW      = game.score.h > game.score.a;
+  const aW      = game.score.a > game.score.h;
+  const dr      = game.score.h === game.score.a;
   const correct = didWin(game, game.pick);
+
   return (
-    <div className="card-hover fadeUp" style={{background:COLORS.bg1, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:"14px 16px", animationDelay:`${delay}s`, animationFillMode:"both"}}>
-      <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
-        <span style={{fontSize:10, color:COLORS.text2, display:"flex", alignItems:"center", gap:5}}>
-          <span>{game.flag}</span><span>{game.league}</span><span>·</span><span>{game.round}</span>
-        </span>
-        <span style={{fontSize:10, color:COLORS.text2, fontFamily:"monospace"}}>{game.display}</span>
-      </div>
-      <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:10, alignItems:"center", marginBottom:10}}>
-        <div style={{textAlign:"right"}}>
-          <div style={{fontWeight:hW?800:500, fontSize:14, color:hW?COLORS.text0:COLORS.text2}}>{game.home}</div>
+    <div className="card-hover fadeUp" style={{
+      background: COLORS.bg1,
+      border:`1px solid ${correct ? COLORS.greenBorder : "rgba(255,82,82,0.2)"}`,
+      borderRadius:14, overflow:"hidden",
+      animationDelay:`${delay}s`, animationFillMode:"both",
+    }}>
+      {/* Top accent bar */}
+      <div style={{height:3, background: correct ? COLORS.green : COLORS.red, opacity:0.7}}/>
+
+      <div style={{padding:"14px 16px"}}>
+        {/* Meta row */}
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12}}>
+          <div style={{display:"flex", alignItems:"center", gap:6}}>
+            <span style={{fontSize:13}}>{game.flag}</span>
+            <div>
+              <div style={{fontSize:10, color:COLORS.text1, fontWeight:600}}>{game.league}</div>
+              <div style={{fontSize:9, color:COLORS.text2}}>{game.round}</div>
+            </div>
+          </div>
+          <div style={{display:"flex", alignItems:"center", gap:7}}>
+            <span style={{fontSize:10, color:COLORS.text2, fontFamily:"monospace"}}>{game.display}</span>
+            <span style={{
+              fontSize:10, fontWeight:900, letterSpacing:"0.07em",
+              padding:"3px 10px", borderRadius:999,
+              background: correct ? COLORS.greenFaint : COLORS.redFaint,
+              border:`1px solid ${correct ? COLORS.greenBorder : "rgba(255,82,82,0.25)"}`,
+              color: correct ? COLORS.green : COLORS.red,
+            }}>
+              {correct ? "✓ CORRECT" : "✗ WRONG"}
+            </span>
+          </div>
         </div>
-        <div style={{textAlign:"center", background:dr?COLORS.goldFaint:COLORS.bg2, border:`1px solid ${dr?COLORS.goldBorder:COLORS.border}`, borderRadius:10, padding:"7px 14px", minWidth:68}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:20, color:dr?COLORS.gold:COLORS.text0}}>{game.score.h}–{game.score.a}</div>
-          <div style={{fontSize:8, color:COLORS.text2, letterSpacing:"0.1em", fontWeight:700}}>FT</div>
+
+        {/* Score block — hero element */}
+        <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:10, alignItems:"center", marginBottom:12}}>
+          <div style={{textAlign:"right"}}>
+            <div style={{
+              fontWeight: hW ? 900 : 500, fontSize:15, lineHeight:1.2,
+              color: hW ? COLORS.text0 : COLORS.text2,
+            }}>{game.home}</div>
+            <div style={{fontSize:9, color:COLORS.text2, marginTop:3, letterSpacing:"0.06em"}}>HOME</div>
+          </div>
+
+          <div style={{
+            textAlign:"center", minWidth:80,
+            background: dr ? COLORS.goldFaint : correct ? COLORS.greenFaint : COLORS.redFaint,
+            border:`1px solid ${dr ? COLORS.goldBorder : correct ? COLORS.greenBorder : "rgba(255,82,82,0.25)"}`,
+            borderRadius:12, padding:"10px 14px",
+          }}>
+            <div style={{
+              fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:30,
+              color: dr ? COLORS.gold : correct ? COLORS.green : COLORS.text0,
+              letterSpacing:"0.04em", lineHeight:1,
+            }}>
+              {game.score.h}–{game.score.a}
+            </div>
+            <div style={{fontSize:8, color: dr ? COLORS.gold : COLORS.text2, fontWeight:800, letterSpacing:"0.12em", marginTop:4}}>
+              FULL TIME
+            </div>
+          </div>
+
+          <div>
+            <div style={{
+              fontWeight: aW ? 900 : 500, fontSize:15, lineHeight:1.2,
+              color: aW ? COLORS.text0 : COLORS.text2,
+            }}>{game.away}</div>
+            <div style={{fontSize:9, color:COLORS.text2, marginTop:3, letterSpacing:"0.06em"}}>AWAY</div>
+          </div>
         </div>
-        <div>
-          <div style={{fontWeight:aW?800:500, fontSize:14, color:aW?COLORS.text0:COLORS.text2}}>{game.away}</div>
+
+        {/* AI pick strip */}
+        <div style={{
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:"8px 12px", borderRadius:9,
+          background: correct ? COLORS.greenFaint : COLORS.redFaint,
+          border:`1px solid ${correct ? COLORS.greenBorder : "rgba(255,82,82,0.15)"}`,
+        }}>
+          <div style={{display:"flex", alignItems:"center", gap:6}}>
+            <span style={{width:6, height:6, borderRadius:"50%", background:pickColor(game.pick), flexShrink:0}}/>
+            <span style={{fontSize:11, color:COLORS.text1}}>
+              AI pick: <span style={{color:pickColor(game.pick), fontWeight:700}}>{pickName(game.pick)}</span>
+            </span>
+          </div>
+          <span style={{
+            fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, fontWeight:800,
+            color:COLORS.gold, background:COLORS.goldFaint,
+            border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"1px 8px",
+          }}>
+            {oddsFor(game, game.pick).toFixed(2)}
+          </span>
         </div>
-      </div>
-      <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 10px", borderRadius:8,
-        background:correct?COLORS.greenFaint:COLORS.redFaint, border:`1px solid ${correct?COLORS.greenBorder:"rgba(255,82,82,0.15)"}`}}>
-        <span style={{fontSize:10, color:COLORS.text2}}>
-          AI: <span style={{color:pickColor(game.pick), fontWeight:700}}>{pickName(game.pick)}</span>
-          <span style={{color:COLORS.text2}}> @ {oddsFor(game, game.pick).toFixed(2)}</span>
-        </span>
-        <span style={{fontSize:11, fontWeight:800, color:correct?COLORS.green:COLORS.red}}>{correct ? "✓ Correct" : "✗ Wrong"}</span>
       </div>
     </div>
   );
@@ -1738,25 +1842,32 @@ function ResultCard({game, delay=0}) {
 
 /* ── HISTORY CARD ────────────────────────────────────────────── */
 function HistoryCard({entry, open, onToggle}) {
-  const sc = entry.status==="won" ? COLORS.green : entry.status==="lost" ? COLORS.red : COLORS.gold;
-  const bcol = entry.status==="won" ? COLORS.greenBorder : entry.status==="lost" ? "rgba(255,82,82,0.22)" : COLORS.border;
-  const pnl = entry.status==="won" ? +(entry.potReturn - entry.totalStake).toFixed(2) : entry.status==="lost" ? -entry.totalStake : null;
-  const ref = `#${String(entry.id).slice(-6).toUpperCase()}`;
+  const isWon    = entry.status === "won";
+  const isLost   = entry.status === "lost";
+  const isPend   = entry.status === "pending";
+  const sc       = isWon ? COLORS.green : isLost ? COLORS.red : COLORS.gold;
+  const bcol     = isWon ? COLORS.greenBorder : isLost ? "rgba(255,82,82,0.22)" : COLORS.border;
+  const pnl      = isWon ? +(entry.potReturn - entry.totalStake).toFixed(2)
+                 : isLost ? -entry.totalStake : null;
+  const ref      = `#${String(entry.id).slice(-6).toUpperCase()}`;
   const placedAt = new Date(entry.placedAt);
-  const dateStr = placedAt.toLocaleDateString("en-GB", {day:"numeric", month:"short", year:"numeric"});
-  const timeStr = placedAt.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
-  const isAcca = entry.bets.length > 1;
+  const dateStr  = placedAt.toLocaleDateString("en-GB", {day:"numeric", month:"short", year:"numeric"});
+  const timeStr  = placedAt.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
+  const isAcca   = entry.bets.length > 1;
 
   return (
     <div className="fadeUp" style={{
       background:COLORS.bg1, border:`1px solid ${bcol}`,
       borderRadius:15, overflow:"hidden", marginBottom:10,
-      boxShadow: entry.status==="won" ? "0 0 0 1px rgba(0,230,118,0.06)" : "none"
+      boxShadow: isWon ? "0 0 0 1px rgba(0,230,118,0.08), 0 2px 16px rgba(0,230,118,0.04)" : "none",
     }}>
-      {/* ── Header bar ── */}
+      {/* Top accent bar — colour-coded */}
+      <div style={{height:3, background: isWon ? COLORS.green : isLost ? COLORS.red : COLORS.gold, opacity:0.7}}/>
+
+      {/* ── Clickable header ── */}
       <div onClick={onToggle} style={{padding:"14px 16px", cursor:"pointer"}}>
         <div style={{display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10}}>
-          {/* Left: ref + meta */}
+          {/* Left */}
           <div style={{flex:1, minWidth:0}}>
             <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:5}}>
               <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:13, color:COLORS.text2, letterSpacing:"0.08em"}}>{ref}</span>
@@ -1776,17 +1887,38 @@ function HistoryCard({entry, open, onToggle}) {
             {entry.bets.length === 1 && (
               <div style={{fontSize:11, color:pickColor(entry.bets[0].pick), fontWeight:700, marginTop:3}}>
                 {pickName(entry.bets[0].pick)}
+                {/* Show score inline for single bets */}
+                {entry.bets[0].score && (
+                  <span style={{
+                    marginLeft:8, fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, fontWeight:900,
+                    color: entry.bets[0].result === "won" ? COLORS.green : entry.bets[0].result === "lost" ? COLORS.red : COLORS.text2,
+                    background: COLORS.bg2, border:`1px solid ${COLORS.border}`,
+                    borderRadius:5, padding:"1px 8px",
+                  }}>
+                    {entry.bets[0].score.h}–{entry.bets[0].score.a} FT
+                  </span>
+                )}
               </div>
             )}
           </div>
-          {/* Right: status pill */}
-          <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6, flexShrink:0}}>
+
+          {/* Right: status + balance impact */}
+          <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5, flexShrink:0}}>
             <div style={{
               padding:"4px 12px", borderRadius:20, fontSize:10, fontWeight:900,
-              letterSpacing:"0.08em", background:`${sc}18`, color:sc, border:`1px solid ${sc}40`
+              letterSpacing:"0.08em", background:`${sc}18`, color:sc, border:`1px solid ${sc}40`,
             }}>
-              {entry.status === "pending" ? "⏳ PENDING" : entry.status === "won" ? "✓ WON" : "✗ LOST"}
+              {isPend ? "⏳ PENDING" : isWon ? "✓ WON" : "✗ LOST"}
             </div>
+            {/* Balance impact badge */}
+            {!isPend && pnl !== null && (
+              <div style={{
+                fontSize:11, fontWeight:800,
+                color: isWon ? COLORS.green : COLORS.red,
+              }}>
+                {isWon ? `+€${pnl.toFixed(2)}` : `-€${Math.abs(pnl).toFixed(2)}`}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1794,18 +1926,22 @@ function HistoryCard({entry, open, onToggle}) {
         <div style={{
           display:"grid", gridTemplateColumns: isAcca ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr",
           gap:0, marginTop:12, background:COLORS.bg0, borderRadius:10,
-          border:`1px solid ${COLORS.border}`, overflow:"hidden"
+          border:`1px solid ${COLORS.border}`, overflow:"hidden",
         }}>
           {[
-            {label:"STAKE", val:`€${entry.totalStake.toFixed(2)}`, col:COLORS.text1},
-            ...(isAcca ? [{label:"ODDS", val:`${entry.accumOdds}×`, col:COLORS.gold}] : []),
-            {label:"POTENTIAL", val:`€${entry.potReturn.toFixed(2)}`, col:COLORS.text0},
-            {label:"P&L", val: pnl !== null ? `${pnl >= 0 ? "+" : ""}€${Math.abs(pnl).toFixed(2)}` : "—",
+            {label:"STAKE",   val:`€${entry.totalStake.toFixed(2)}`,  col:COLORS.text1},
+            ...(isAcca ? [{label:"ODDS", val:`${entry.accumOdds}×`,    col:COLORS.gold}] : []),
+            {label:"RETURN",  val:`€${entry.potReturn.toFixed(2)}`,   col:COLORS.text0},
+            {label: isWon ? "PROFIT" : isLost ? "LOSS" : "P&L",
+             val: pnl !== null ? `${pnl >= 0 ? "+" : ""}€${Math.abs(pnl).toFixed(2)}` : "—",
              col: pnl === null ? COLORS.gold : pnl >= 0 ? COLORS.green : COLORS.red},
           ].map((f, fi, arr) => (
             <div key={f.label} style={{
               padding:"10px 12px", textAlign:"center",
-              borderRight: fi < arr.length-1 ? `1px solid ${COLORS.border}` : "none"
+              borderRight: fi < arr.length-1 ? `1px solid ${COLORS.border}` : "none",
+              background: fi === arr.length-1 && !isPend
+                ? (isWon ? "rgba(0,230,118,0.04)" : "rgba(255,82,82,0.04)")
+                : "transparent",
             }}>
               <div style={{fontSize:8, color:COLORS.text2, letterSpacing:"0.1em", fontWeight:700, marginBottom:4}}>{f.label}</div>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:15, color:f.col}}>{f.val}</div>
@@ -1824,74 +1960,121 @@ function HistoryCard({entry, open, onToggle}) {
       {open && (
         <div style={{borderTop:`1px solid ${COLORS.border}`, background:COLORS.bg0}}>
           {entry.bets.map((b, i) => {
-            const rc = b.result==="won" ? COLORS.green : b.result==="lost" ? COLORS.red : COLORS.gold;
+            const rc     = b.result==="won" ? COLORS.green : b.result==="lost" ? COLORS.red : COLORS.gold;
+            const rbg    = b.result==="won" ? COLORS.greenFaint : b.result==="lost" ? COLORS.redFaint : COLORS.goldFaint;
+            const rbc    = b.result==="won" ? COLORS.greenBorder : b.result==="lost" ? "rgba(255,82,82,0.3)" : COLORS.goldBorder;
             const isLast = i === entry.bets.length - 1;
+            // Determine score winner
+            const hW     = b.score ? b.score.h > b.score.a : false;
+            const aW     = b.score ? b.score.a > b.score.h : false;
             return (
               <div key={i} style={{
-                display:"grid", gridTemplateColumns:"24px 1fr auto",
-                gap:12, padding:"12px 16px",
+                padding:"12px 16px",
                 borderBottom: isLast ? "none" : `1px solid ${COLORS.border}`,
-                alignItems:"center"
+                background: b.result === "won" ? "rgba(0,230,118,0.02)"
+                          : b.result === "lost" ? "rgba(255,82,82,0.02)" : "transparent",
               }}>
-                {/* Status dot / icon */}
-                <div style={{
-                  width:24, height:24, borderRadius:"50%", flexShrink:0,
-                  background: b.result==="pending" ? "rgba(255,215,64,0.12)" : b.result==="won" ? COLORS.greenFaint : COLORS.redFaint,
-                  border:`1px solid ${b.result==="pending" ? COLORS.goldBorder : b.result==="won" ? COLORS.greenBorder : "rgba(255,82,82,0.3)"}`,
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  fontSize:11, color:rc, fontWeight:900
-                }}>
-                  {b.result==="pending" ? <span style={{fontSize:10, animation:"pulse 1.8s ease infinite", display:"inline-block"}}>·</span>
-                   : b.result==="won" ? "✓" : "✗"}
-                </div>
+                <div style={{display:"grid", gridTemplateColumns:"auto 1fr auto", gap:12, alignItems:"center"}}>
 
-                {/* Match info */}
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:10, color:COLORS.text2, marginBottom:2, display:"flex", alignItems:"center", gap:5}}>
-                    <span>{b.flag}</span><span>{b.league}</span>
+                  {/* Result icon */}
+                  <div style={{
+                    width:28, height:28, borderRadius:"50%", flexShrink:0,
+                    background:rbg, border:`1px solid ${rbc}`,
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    fontSize:12, color:rc, fontWeight:900,
+                  }}>
+                    {b.result==="pending"
+                      ? <span style={{fontSize:10, animation:"pulse 1.8s ease infinite", display:"inline-block"}}>·</span>
+                      : b.result==="won" ? "✓" : "✗"}
                   </div>
-                  <div style={{fontSize:13, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3}}>
-                    {b.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:11}}>vs</span> {b.away}
-                  </div>
-                  <div style={{display:"flex", alignItems:"center", gap:6, marginTop:3}}>
-                    <span style={{fontSize:11, color:pickColor(b.pick), fontWeight:700}}>{pickName(b.pick)}</span>
-                    {b.score && (
-                      <span style={{fontSize:10, color:COLORS.text2, fontFamily:"monospace", background:COLORS.bg2,
-                        border:`1px solid ${COLORS.border}`, borderRadius:4, padding:"1px 7px"}}>
-                        {b.score.h}–{b.score.a} FT
+
+                  {/* Match details */}
+                  <div style={{minWidth:0}}>
+                    <div style={{fontSize:10, color:COLORS.text2, marginBottom:3, display:"flex", alignItems:"center", gap:5}}>
+                      <span>{b.flag}</span><span>{b.league}</span>
+                    </div>
+
+                    {/* Score row — the key addition */}
+                    {b.score ? (
+                      <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:4}}>
+                        <span style={{fontSize:13, fontWeight: hW ? 800 : 500,
+                          color: hW ? COLORS.text0 : COLORS.text2}}>{b.home}</span>
+                        <span style={{
+                          fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18,
+                          color: b.result === "won" ? COLORS.green : b.result === "lost" ? COLORS.red : COLORS.text0,
+                          background:rbg, border:`1px solid ${rbc}`,
+                          borderRadius:7, padding:"1px 10px", letterSpacing:"0.04em",
+                        }}>
+                          {b.score.h}–{b.score.a}
+                        </span>
+                        <span style={{fontSize:13, fontWeight: aW ? 800 : 500,
+                          color: aW ? COLORS.text0 : COLORS.text2}}>{b.away}</span>
+                        <span style={{fontSize:8, color:COLORS.text2, fontWeight:700, letterSpacing:"0.1em"}}>FT</span>
+                      </div>
+                    ) : (
+                      <div style={{fontSize:13, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3, marginBottom:4}}>
+                        {b.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:11}}>vs</span> {b.away}
+                      </div>
+                    )}
+
+                    <div style={{display:"flex", alignItems:"center", gap:6}}>
+                      <span style={{fontSize:11, color:pickColor(b.pick), fontWeight:700}}>
+                        {pickName(b.pick)}
                       </span>
+                      <span style={{
+                        fontSize:9, fontWeight:800, letterSpacing:"0.06em",
+                        color:rc, background:rbg, border:`1px solid ${rbc}`,
+                        borderRadius:4, padding:"1px 6px",
+                      }}>
+                        {b.result === "pending" ? "PENDING" : b.result === "won" ? "WON" : "LOST"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Odds + single-bet payout */}
+                  <div style={{textAlign:"right", flexShrink:0}}>
+                    <div style={{
+                      fontFamily:"'Barlow Condensed',sans-serif", fontSize:15, fontWeight:900,
+                      color:COLORS.gold, background:COLORS.goldFaint,
+                      border:`1px solid ${COLORS.goldBorder}`, borderRadius:7,
+                      padding:"4px 10px", textAlign:"center", marginBottom:4,
+                    }}>
+                      {b.odds.toFixed(2)}×
+                    </div>
+                    {/* Per-leg payout for single bets */}
+                    {!isAcca && b.result !== "pending" && (
+                      <div style={{fontSize:10, fontWeight:700, color:rc, textAlign:"center"}}>
+                        {b.result === "won"
+                          ? `+€${(parseFloat(entry.bets[0].stake || "10") * b.odds).toFixed(2)}`
+                          : `-€${parseFloat(entry.bets[0].stake || "10").toFixed(2)}`}
+                      </div>
                     )}
                   </div>
-                </div>
-
-                {/* Odds */}
-                <div style={{
-                  fontFamily:"'Barlow Condensed',sans-serif", fontSize:15, fontWeight:900,
-                  color:COLORS.gold, background:COLORS.goldFaint,
-                  border:`1px solid ${COLORS.goldBorder}`, borderRadius:7,
-                  padding:"4px 10px", flexShrink:0, textAlign:"center"
-                }}>
-                  {b.odds.toFixed(2)}×
                 </div>
               </div>
             );
           })}
 
-          {/* Accumulator chain summary */}
+          {/* Accumulator footer summary */}
           {isAcca && (
             <div style={{
               margin:"0 16px 14px", padding:"10px 14px",
-              background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:10,
-              display:"flex", justifyContent:"space-between", alignItems:"center"
+              background: isWon ? "rgba(0,230,118,0.06)" : isLost ? "rgba(255,82,82,0.06)" : COLORS.bg2,
+              border:`1px solid ${isWon ? COLORS.greenBorder : isLost ? "rgba(255,82,82,0.25)" : COLORS.border}`,
+              borderRadius:10,
+              display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8,
             }}>
               <span style={{fontSize:11, color:COLORS.text2}}>
-                Combined odds: <span style={{color:COLORS.gold, fontWeight:800, fontFamily:"'Barlow Condensed',sans-serif", fontSize:14}}>{entry.accumOdds}×</span>
+                Combined: <span style={{color:COLORS.gold, fontWeight:800, fontFamily:"'Barlow Condensed',sans-serif", fontSize:14}}>{entry.accumOdds}×</span>
               </span>
               <span style={{fontSize:11, color:COLORS.text2}}>
                 Stake: <span style={{color:COLORS.text0, fontWeight:700}}>€{entry.totalStake.toFixed(2)}</span>
               </span>
               <span style={{fontSize:11}}>
-                Return: <span style={{color:sc, fontWeight:800, fontFamily:"'Barlow Condensed',sans-serif", fontSize:14}}>€{entry.potReturn.toFixed(2)}</span>
+                {isWon ? "Returned: " : isLost ? "Lost: " : "Potential: "}
+                <span style={{color:sc, fontWeight:800, fontFamily:"'Barlow Condensed',sans-serif", fontSize:15}}>
+                  {isLost ? `-€${entry.totalStake.toFixed(2)}` : `€${entry.potReturn.toFixed(2)}`}
+                </span>
               </span>
             </div>
           )}
