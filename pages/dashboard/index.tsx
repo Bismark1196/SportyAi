@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
+import { useLiveScores, mergeLiveScore } from "../../lib/useLiveScores";
 
 /* ══════════════════════════════════════════════════════════════
    BETAI PRO — FULLY RESPONSIVE (Mobile · Tablet · Desktop)
@@ -283,24 +284,6 @@ const didWin = (g, p) => {
   return null;
 };
 
-/* ── GAME STATUS ─────────────────────────────────────────────
-   Derives real-time status from kick-off timestamp.
-   - "upcoming"  : kick-off is in the future
-   - "live"      : kick-off was 0–105 min ago (90 min match + 15 min buffer)
-   - "finished"  : kick-off was more than 105 min ago
-   Games with st==="result" (have a score) are always "finished".
-   ──────────────────────────────────────────────────────────── */
-const getGameStatus = (g) => {
-  if (g.st === "result") return { status:"finished", minutesElapsed:null };
-  const now   = Date.now();
-  const kick  = new Date(g.kick).getTime();
-  const diff  = now - kick; // ms since kick-off (negative = future)
-  if (diff < 0)        return { status:"upcoming",  minutesElapsed:null };
-  const mins  = Math.floor(diff / 60000);
-  if (mins <= 105)     return { status:"live",       minutesElapsed:Math.min(mins, 90) };
-  return               { status:"finished",          minutesElapsed:null };
-};
-
 /* ── DATE HELPERS ─────────────────────────────────────────── */
 const toDateKey = isoStr => isoStr.slice(0, 10); // "YYYY-MM-DD"
 
@@ -379,8 +362,6 @@ export default function App() {
   const inSlip     = id => slip.some(b => b.id === id);
 
   function addToSlip(game, pick) {
-    const { status } = getGameStatus(game);
-    if (status !== "upcoming") return; // block live & finished games
     if (inSlip(game.id)) { setSlip(p => p.filter(b => b.id !== game.id)); return; }
     const odds = oddsFor(game, pick);
     setSlip(p => [...p, {id:game.id, home:game.home, away:game.away, league:game.league, flag:game.flag, pick, odds, stake:"10"}]);
@@ -389,8 +370,6 @@ export default function App() {
   }
 
   function addMega(m) {
-    const { status } = getGameStatus(m);
-    if (status !== "upcoming") return; // block live & finished mega picks
     if (inSlip(m.id)) { setSlip(p => p.filter(b => b.id !== m.id)); return; }
     setSlip(p => [...p, {id:m.id, home:m.home, away:m.away, league:m.league, flag:m.flag, pick:m.pick, odds:m.odds, stake:"10"}]);
     setSlipOpen(true);
@@ -442,9 +421,15 @@ export default function App() {
   const totalWagered = history.reduce((a, e) => a + e.totalStake, 0);
   const totalReturns = settled.filter(e => e.status === "won").reduce((a, e) => a + e.potReturn, 0);
 
-  const upGames  = GAMES.filter(g => g.st === "upcoming" && (cat === "All" || g.cat === cat));
-  const resGames = GAMES.filter(g => g.st === "result"   && (cat === "All" || g.cat === cat));
-  const upcoming = GAMES.filter(g => g.st === "upcoming");
+  // ── LIVE SCORES ────────────────────────────────────────────────────────────
+  const { scoresById, scores: liveFixtures, connected: liveConnected, hasLive, lastUpdated, source: liveSource } = useLiveScores();
+
+  // Enrich every GAMES entry with real-time data from the SSE stream
+  const GAMES_LIVE = GAMES.map(g => mergeLiveScore(g, scoresById));
+
+  const upGames  = GAMES_LIVE.filter(g => g.st === "upcoming" && (cat === "All" || g.cat === cat));
+  const resGames = GAMES_LIVE.filter(g => g.st === "result"   && (cat === "All" || g.cat === cat));
+  const upcoming = GAMES_LIVE.filter(g => g.st === "upcoming");
 
   const avgConf = upcoming.length ? Math.round(upcoming.reduce((a, g) => a + g.conf, 0) / upcoming.length) : 0;
 
@@ -896,6 +881,128 @@ export default function App() {
                 </div>
               )}
 
+              {/* ─── LIVE SCORES PANEL ──────────────────────────────── */}
+              {liveFixtures.length > 0 && (
+                <div style={{marginBottom:18}}>
+                  <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
+                    <div style={{display:"flex", alignItems:"center", gap:8}}>
+                      <div style={{width:4, height:22, borderRadius:2, background:hasLive?COLORS.red:COLORS.blue}}/>
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18}}>
+                        {hasLive ? "🔴 LIVE NOW" : "📅 TODAY'S FIXTURES"}
+                      </span>
+                      {hasLive && (
+                        <span className="pulse" style={{fontSize:9, color:COLORS.red, background:COLORS.redFaint, border:"1px solid rgba(255,82,82,0.25)", borderRadius:5, padding:"2px 8px", fontWeight:800}}>
+                          LIVE
+                        </span>
+                      )}
+                    </div>
+                    <div style={{display:"flex", alignItems:"center", gap:8}}>
+                      {liveConnected
+                        ? <span style={{fontSize:9, color:COLORS.green, background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:20, padding:"3px 10px", fontWeight:700, display:"flex", alignItems:"center", gap:5}}>
+                            <span className="pulse" style={{width:6,height:6,borderRadius:"50%",background:COLORS.green,display:"inline-block"}}/>
+                            LIVE FEED
+                          </span>
+                        : <span style={{fontSize:9, color:COLORS.text2, fontWeight:600}}>Reconnecting…</span>
+                      }
+                    </div>
+                  </div>
+
+                  <div style={{display:"flex", flexDirection:"column", gap:8}}>
+                    {liveFixtures.slice(0, 6).map((fixture) => (
+                      <div key={fixture.id} className="card-hover" style={{
+                        background: fixture.isLive
+                          ? "linear-gradient(135deg,rgba(255,82,82,0.07),rgba(12,13,26,0.98))"
+                          : COLORS.bg2,
+                        border:`1px solid ${fixture.isLive ? "rgba(255,82,82,0.25)" : COLORS.border}`,
+                        borderRadius:12, padding:"12px 14px",
+                      }}>
+                        {/* League + status */}
+                        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8}}>
+                          <div style={{display:"flex", alignItems:"center", gap:6}}>
+                            <span style={{fontSize:13}}>{fixture.flag}</span>
+                            <span style={{fontSize:9, color:COLORS.text1, fontWeight:600, letterSpacing:"0.05em"}}>{fixture.league.toUpperCase()}</span>
+                          </div>
+                          {/* Status badge */}
+                          {fixture.isLive ? (
+                            <span className="pulse" style={{
+                              fontSize:10, fontWeight:900, color:COLORS.red,
+                              background:COLORS.redFaint, border:"1px solid rgba(255,82,82,0.3)",
+                              borderRadius:5, padding:"2px 8px", letterSpacing:"0.05em",
+                            }}>{fixture.statusLabel}</span>
+                          ) : fixture.isFinished ? (
+                            <span style={{
+                              fontSize:9, fontWeight:800, color:COLORS.text2,
+                              background:COLORS.bg3, border:`1px solid ${COLORS.border}`,
+                              borderRadius:5, padding:"2px 8px",
+                            }}>FT</span>
+                          ) : (
+                            <span style={{
+                              fontSize:10, fontWeight:700, color:COLORS.blue,
+                              background:COLORS.blueFaint, border:"1px solid rgba(68,138,255,0.25)",
+                              borderRadius:5, padding:"2px 8px", fontFamily:"monospace",
+                            }}>{fixture.statusLabel}</span>
+                          )}
+                        </div>
+
+                        {/* Teams + score */}
+                        <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr", alignItems:"center", gap:8}}>
+                          <div style={{textAlign:"right"}}>
+                            <div style={{fontWeight:700, fontSize:13, color:COLORS.text0, lineHeight:1.2}}>{fixture.home}</div>
+                          </div>
+
+                          {/* Score / VS */}
+                          <div style={{
+                            minWidth:54, textAlign:"center",
+                            background: fixture.isLive || fixture.isFinished ? COLORS.bg3 : COLORS.bg2,
+                            border:`1px solid ${fixture.isLive ? "rgba(255,82,82,0.2)" : COLORS.border}`,
+                            borderRadius:8, padding:"5px 10px",
+                          }}>
+                            {fixture.homeScore !== null && fixture.awayScore !== null ? (
+                              <>
+                                <div style={{
+                                  fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18,
+                                  color: fixture.isLive ? COLORS.red : fixture.isFinished ? COLORS.text0 : COLORS.text1,
+                                  lineHeight:1, letterSpacing:"0.02em",
+                                }}>
+                                  {fixture.homeScore}–{fixture.awayScore}
+                                </div>
+                                {fixture.isLive && fixture.minute && (
+                                  <div style={{fontSize:8, color:COLORS.red, fontWeight:700, marginTop:2}}>{fixture.minute}'</div>
+                                )}
+                              </>
+                            ) : (
+                              <div style={{fontSize:10, color:COLORS.text2, fontWeight:700}}>VS</div>
+                            )}
+                          </div>
+
+                          <div>
+                            <div style={{fontWeight:600, fontSize:13, color:COLORS.text1, lineHeight:1.2}}>{fixture.away}</div>
+                          </div>
+                        </div>
+
+                        {/* Progress bar for live games */}
+                        {fixture.isLive && fixture.minute && (
+                          <div style={{marginTop:8, height:2, background:"rgba(255,82,82,0.12)", borderRadius:99}}>
+                            <div style={{
+                              height:"100%", borderRadius:99, background:COLORS.red,
+                              width:`${Math.min(100, (fixture.minute / 90) * 100)}%`,
+                              transition:"width 1s ease",
+                            }}/>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {lastUpdated && (
+                    <div style={{fontSize:9, color:COLORS.text2, marginTop:8, textAlign:"right"}}>
+                      Updated {new Date(lastUpdated).toLocaleTimeString("en-GB", {hour:"2-digit",minute:"2-digit",second:"2-digit"})}
+                      {liveSource && liveSource !== "mock" && <> · {liveSource}</>}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* UCL preview */}
               <div style={{marginBottom:18}}>
                 <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
@@ -1263,75 +1370,24 @@ export default function App() {
 function CompactRow({game, inSlip, onAdd}) {
   const cm = confMeta(game.conf);
   const ai = oddsFor(game, game.pick);
-  const { status, minutesElapsed } = getGameStatus(game);
-  const isLive     = status === "live";
-  const isFinished = status === "finished";
-  const canAdd     = status === "upcoming";
-
-  const score = game.score; // may be undefined for upcoming/live
-
   return (
-    <div className="card-hover fadeUp" style={{
-      background: isLive ? "rgba(0,230,118,0.04)" : COLORS.bg2,
-      border:`1px solid ${isLive ? COLORS.greenBorder : inSlip ? COLORS.greenBorder : COLORS.border}`,
-      borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", gap:10,
-    }}>
+    <div className="card-hover fadeUp" style={{background:COLORS.bg2, border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`, borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", gap:10}}>
       <div style={{flex:1, minWidth:0}}>
-        <div style={{fontSize:10, color:COLORS.text2, marginBottom:4, display:"flex", alignItems:"center", gap:5, flexWrap:"wrap"}}>
-          <span>{game.flag}</span>
-          <span>{game.league}</span>
-          <span>·</span>
-          {isLive ? (
-            <span className="pulse" style={{color:COLORS.green, fontWeight:800, letterSpacing:"0.08em"}}>
-              🟢 LIVE {minutesElapsed !== null ? `${minutesElapsed}'` : ""}
-            </span>
-          ) : isFinished ? (
-            <span style={{color:COLORS.text2}}>FT</span>
-          ) : (
-            <span>{game.display}</span>
-          )}
+        <div style={{fontSize:10, color:COLORS.text2, marginBottom:4, display:"flex", alignItems:"center", gap:5}}>
+          <span>{game.flag}</span><span>{game.league}</span><span>·</span><span>{game.display}</span>
         </div>
-        <div style={{fontWeight:700, fontSize:13}}>
-          {game.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:11}}>vs</span> {game.away}
-        </div>
-        <div style={{display:"flex", alignItems:"center", gap:6, marginTop:4, flexWrap:"wrap"}}>
-          {(isLive || isFinished) && score ? (
-            <span style={{
-              fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:16,
-              color: isLive ? COLORS.green : COLORS.text0,
-              background: isLive ? COLORS.greenFaint : COLORS.bg3,
-              border:`1px solid ${isLive ? COLORS.greenBorder : COLORS.border}`,
-              borderRadius:6, padding:"1px 9px", letterSpacing:"0.04em",
-            }}>{score.h} – {score.a}</span>
-          ) : (
-            <>
-              <span style={{fontSize:10, color:pickColor(game.pick), fontWeight:700}}>{pickName(game.pick)}</span>
-              <span style={{fontSize:9, color:cm.c, background:cm.bg, border:`1px solid ${cm.bc}`, borderRadius:4, padding:"1px 6px", fontWeight:700}}>
-                {cm.label} {game.conf}%
-              </span>
-            </>
-          )}
+        <div style={{fontWeight:700, fontSize:13}}>{game.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:11}}>vs</span> {game.away}</div>
+        <div style={{display:"flex", alignItems:"center", gap:6, marginTop:4}}>
+          <span style={{fontSize:10, color:pickColor(game.pick), fontWeight:700}}>{pickName(game.pick)}</span>
+          <span style={{fontSize:9, color:cm.c, background:cm.bg, border:`1px solid ${cm.bc}`, borderRadius:4, padding:"1px 6px", fontWeight:700}}>{cm.label} {game.conf}%</span>
         </div>
       </div>
-
-      {canAdd ? (
-        <button className="btn" onClick={() => onAdd(game.pick)}
-          style={{display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:9, flexShrink:0,
-            background:inSlip?COLORS.greenFaint:COLORS.bg3, border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`,
-            color:inSlip?COLORS.green:COLORS.text1, fontSize:11, fontWeight:700}}>
-          {inSlip ? "✓ ADDED" : `+ ${ai.toFixed(2)}`}
-        </button>
-      ) : (
-        <div style={{
-          padding:"6px 12px", borderRadius:9, flexShrink:0,
-          background: isLive ? COLORS.greenFaint : COLORS.bg3,
-          border:`1px solid ${isLive ? COLORS.greenBorder : COLORS.border}`,
-          fontSize:9, fontWeight:800, letterSpacing:"0.07em",
-          color: isLive ? COLORS.green : COLORS.text2,
-        }}>
-          {isLive ? "🟢 IN PLAY" : "FT"}
-        </div>
-      )}
+      <button className="btn" onClick={() => onAdd(game.pick)}
+        style={{display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:9, flexShrink:0,
+          background:inSlip?COLORS.greenFaint:COLORS.bg3, border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`,
+          color:inSlip?COLORS.green:COLORS.text1, fontSize:11, fontWeight:700}}>
+        {inSlip ? "✓ ADDED" : `+ ${ai.toFixed(2)}`}
+      </button>
     </div>
   );
 }
@@ -1339,29 +1395,20 @@ function CompactRow({game, inSlip, onAdd}) {
 /* ── FULL MATCH CARD ─────────────────────────────────────────── */
 function MatchCard({game, inSlip, expanded, onExpand, onAdd, delay=0}) {
   const cm = confMeta(game.conf);
-  const { status, minutesElapsed } = getGameStatus(game);
-  const isLive     = status === "live";
-  const isFinished = status === "finished";
-  const canAdd     = status === "upcoming";
-
-  const score      = game.score; // defined for result games; undefined for upcoming/live
-  const cardBorder = isLive ? COLORS.greenBorder
-    : inSlip ? COLORS.greenBorder
-    : COLORS.border;
-  const cardBg     = isLive ? "rgba(0,230,118,0.03)" : COLORS.bg1;
+  const tonight = new Date(game.kick).toDateString() === new Date().toDateString();
+  const hasLiveScore = game.liveScore !== null;
+  const isLive       = game.isLive;
+  const isFinished   = game.isFinished;
 
   return (
     <div className="card-hover fadeUp" style={{
-      background:cardBg,
-      border:`1px solid ${cardBorder}`,
+      background: isLive ? "linear-gradient(135deg,rgba(255,82,82,0.06),rgba(7,8,16,0.98))" : COLORS.bg1,
+      border:`1px solid ${inSlip ? COLORS.greenBorder : isLive ? "rgba(255,82,82,0.28)" : COLORS.border}`,
       borderRadius:15, overflow:"hidden",
       animationDelay:`${delay}s`, animationFillMode:"both",
-      boxShadow: isLive
-        ? "0 0 0 1px rgba(0,230,118,0.12), 0 0 20px rgba(0,230,118,0.04)"
-        : inSlip ? "0 0 0 1px rgba(0,230,118,0.1)" : "none",
+      boxShadow: isLive ? "0 0 0 1px rgba(255,82,82,0.08)" : inSlip ? "0 0 0 1px rgba(0,230,118,0.1)" : "none",
     }}>
       <div style={{padding:"14px 16px 0"}}>
-        {/* ── Header row ── */}
         <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
           <div style={{display:"flex", alignItems:"center", gap:6}}>
             <span style={{fontSize:14}}>{game.flag}</span>
@@ -1372,84 +1419,77 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, delay=0}) {
           </div>
           <div style={{display:"flex", alignItems:"center", gap:5}}>
             {isLive && (
-              <span className="pulse" style={{
-                fontSize:9, color:COLORS.green,
-                background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`,
-                borderRadius:4, padding:"2px 8px", fontWeight:800, letterSpacing:"0.07em",
-              }}>🟢 LIVE {minutesElapsed !== null ? `${minutesElapsed}'` : ""}</span>
+              <span className="pulse" style={{fontSize:9, color:COLORS.red, background:COLORS.redFaint, border:"1px solid rgba(255,82,82,0.25)", borderRadius:4, padding:"2px 7px", fontWeight:900}}>
+                {game.liveStatusLabel || "LIVE"}
+              </span>
+            )}
+            {!isLive && !isFinished && tonight && (
+              <span className="pulse" style={{fontSize:9, color:COLORS.red, background:COLORS.redFaint, border:"1px solid rgba(255,82,82,0.25)", borderRadius:4, padding:"2px 6px", fontWeight:800}}>TONIGHT</span>
             )}
             {isFinished && (
-              <span style={{
-                fontSize:9, color:COLORS.text1,
-                background:COLORS.bg2, border:`1px solid ${COLORS.border}`,
-                borderRadius:4, padding:"2px 8px", fontWeight:800, letterSpacing:"0.07em",
-              }}>FT</span>
+              <span style={{fontSize:9, color:COLORS.text2, background:COLORS.bg3, border:`1px solid ${COLORS.border}`, borderRadius:4, padding:"2px 6px", fontWeight:700}}>FT</span>
             )}
-            {!isLive && !isFinished && (
-              <span style={{
-                fontSize:9, color:COLORS.text2, fontFamily:"monospace",
-                background:COLORS.bg2, border:`1px solid ${COLORS.border}`,
-                borderRadius:4, padding:"2px 8px",
-              }}>{game.display}</span>
-            )}
-            <span style={{fontSize:9, color:cm.c, background:cm.bg, border:`1px solid ${cm.bc}`, borderRadius:5, padding:"2px 7px", fontWeight:800}}>
-              {cm.label} {game.conf}%
-            </span>
+            <span style={{fontSize:9, color:cm.c, background:cm.bg, border:`1px solid ${cm.bc}`, borderRadius:5, padding:"2px 7px", fontWeight:800}}>{cm.label} {game.conf}%</span>
           </div>
         </div>
 
-        {/* ── Score / VS display ── */}
-        <div style={{marginBottom:10}}>
-          {(isLive || isFinished) && score ? (
-            /* Live or finished: show actual score */
-            <div style={{
-              display:"grid", gridTemplateColumns:"1fr auto 1fr",
-              gap:6, alignItems:"center",
-            }}>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontWeight:800, fontSize:14, lineHeight:1.2}}>{game.home}</div>
-                <div style={{fontSize:9, color:COLORS.text2, marginTop:2, letterSpacing:"0.06em"}}>HOME</div>
-              </div>
-              <div style={{
-                textAlign:"center", minWidth:70,
-                background: isLive ? COLORS.greenFaint : COLORS.bg2,
-                border:`1px solid ${isLive ? COLORS.greenBorder : COLORS.border}`,
-                borderRadius:10, padding:"8px 10px",
-              }}>
-                <div style={{
-                  fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:24,
-                  color: isLive ? COLORS.green : COLORS.text0,
-                  letterSpacing:"0.04em", lineHeight:1,
-                }}>{score.h} – {score.a}</div>
-                <div style={{fontSize:8, color:isLive ? COLORS.green : COLORS.text2, fontWeight:700, letterSpacing:"0.1em", marginTop:3}}>
-                  {isLive ? `${minutesElapsed}'` : "FT"}
-                </div>
-              </div>
-              <div>
-                <div style={{fontWeight:600, fontSize:14, lineHeight:1.2, color:COLORS.text1}}>{game.away}</div>
-                <div style={{fontSize:9, color:COLORS.text2, marginTop:2, letterSpacing:"0.06em"}}>AWAY</div>
-              </div>
-            </div>
-          ) : (
-            /* Upcoming: show VS */
-            <div style={{display:"grid", gridTemplateColumns:"1fr 44px 1fr", gap:6, alignItems:"center"}}>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontWeight:800, fontSize:14, lineHeight:1.2}}>{game.home}</div>
-                <div style={{fontSize:9, color:COLORS.text2, marginTop:2, letterSpacing:"0.06em"}}>HOME</div>
-              </div>
-              <div style={{textAlign:"center", background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:9, padding:"7px 0"}}>
-                <div style={{fontSize:10, color:COLORS.text2, fontWeight:700}}>VS</div>
-              </div>
-              <div>
-                <div style={{fontWeight:600, fontSize:14, lineHeight:1.2, color:COLORS.text1}}>{game.away}</div>
-                <div style={{fontSize:9, color:COLORS.text2, marginTop:2, letterSpacing:"0.06em"}}>AWAY</div>
-              </div>
-            </div>
-          )}
+        {/* Kickoff / Live time */}
+        <div style={{textAlign:"center", fontSize:11, color: isLive ? COLORS.red : COLORS.text2, background:COLORS.bg2, borderRadius:7, padding:"4px", marginBottom:10, fontFamily:"monospace", letterSpacing:"0.04em", fontWeight: isLive ? 800 : 400}}>
+          {isLive && game.liveMinute ? `${game.liveMinute}' — LIVE` : game.display}
         </div>
 
-        {/* ── Win probability bar (upcoming only) ── */}
-        {canAdd && game.prob && (
+        {/* Live score banner */}
+        {hasLiveScore && (
+          <div style={{
+            display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginBottom:10,
+            padding:"10px 16px", borderRadius:10,
+            background: isLive ? "rgba(255,82,82,0.10)" : COLORS.bg2,
+            border:`1px solid ${isLive ? "rgba(255,82,82,0.25)" : COLORS.border}`,
+          }}>
+            <span style={{fontWeight:800, fontSize:14, flex:1, textAlign:"right"}}>{game.home}</span>
+            <div style={{textAlign:"center"}}>
+              <div style={{
+                fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:24,
+                color: isLive ? COLORS.red : COLORS.text0, letterSpacing:"0.04em", lineHeight:1,
+              }}>
+                {game.liveScore.h} – {game.liveScore.a}
+              </div>
+              {isLive && game.liveMinute && (
+                <div style={{fontSize:9, color:COLORS.red, fontWeight:800, marginTop:2}}>{game.liveMinute}'</div>
+              )}
+            </div>
+            <span style={{fontWeight:600, fontSize:14, flex:1, color:COLORS.text1}}>{game.away}</span>
+          </div>
+        )}
+
+        {!hasLiveScore && (
+          <div style={{display:"grid", gridTemplateColumns:"1fr 44px 1fr", gap:6, alignItems:"center", marginBottom:10}}>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontWeight:800, fontSize:14, lineHeight:1.2}}>{game.home}</div>
+              <div style={{fontSize:9, color:COLORS.text2, marginTop:2, letterSpacing:"0.06em"}}>HOME</div>
+            </div>
+            <div style={{textAlign:"center", background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:9, padding:"7px 0"}}>
+              <div style={{fontSize:10, color:COLORS.text2, fontWeight:700}}>VS</div>
+            </div>
+            <div>
+              <div style={{fontWeight:600, fontSize:14, lineHeight:1.2, color:COLORS.text1}}>{game.away}</div>
+              <div style={{fontSize:9, color:COLORS.text2, marginTop:2, letterSpacing:"0.06em"}}>AWAY</div>
+            </div>
+          </div>
+        )}
+
+        {/* Live progress bar */}
+        {isLive && game.liveMinute && (
+          <div style={{marginBottom:10, height:3, background:"rgba(255,82,82,0.12)", borderRadius:99}}>
+            <div style={{
+              height:"100%", borderRadius:99, background:COLORS.red,
+              width:`${Math.min(100,(game.liveMinute/90)*100)}%`,
+              transition:"width 2s ease",
+            }}/>
+          </div>
+        )}
+
+        {game.prob && !isLive && (
           <div style={{marginBottom:10}}>
             <div style={{height:5, borderRadius:99, display:"flex", overflow:"hidden", gap:1.5}}>
               <div style={{flex:game.prob.h, background:COLORS.blue, borderRadius:"99px 0 0 99px"}}/>
@@ -1464,27 +1504,13 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, delay=0}) {
           </div>
         )}
 
-        {/* ── Odds buttons (upcoming only; disabled for live/finished) ── */}
         <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:10}}>
           {[
-            {label:"1", pick:"home_win", val:game.odds.h, col:COLORS.blue},
-            {label:"X", pick:"draw",     val:game.odds.d, col:COLORS.gold},
-            {label:"2", pick:"away_win", val:game.odds.a, col:COLORS.purple},
+            {label:"1", sub:"Home", pick:"home_win", val:game.odds.h, col:COLORS.blue},
+            {label:"X", sub:"Draw", pick:"draw",     val:game.odds.d, col:COLORS.gold},
+            {label:"2", sub:"Away", pick:"away_win",  val:game.odds.a, col:COLORS.purple},
           ].map(o => {
             const isAI = game.pick === o.pick;
-            if (!canAdd) {
-              /* Greyed-out odds display for live/finished */
-              return (
-                <div key={o.label} style={{
-                  padding:"9px 5px", borderRadius:10, textAlign:"center",
-                  border:`1px solid ${COLORS.border}`,
-                  background:COLORS.bg2, opacity:0.45,
-                }}>
-                  <div style={{fontSize:9, color:COLORS.text2, fontWeight:800, letterSpacing:"0.06em", marginBottom:2}}>{o.label}</div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:17, color:COLORS.text2}}>{o.val.toFixed(2)}</div>
-                </div>
-              );
-            }
             return (
               <button key={o.label} className="btn odds-hover" onClick={() => onAdd(o.pick)}
                 style={{padding:"9px 5px", borderRadius:10, textAlign:"center",
@@ -1498,27 +1524,17 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, delay=0}) {
           })}
         </div>
 
-        {/* ── AI pick strip ── */}
-        <div style={{
-          display:"flex", alignItems:"center", justifyContent:"space-between",
-          background: canAdd ? COLORS.greenFaint : COLORS.bg2,
-          border:`1px solid ${canAdd ? COLORS.greenBorder : COLORS.border}`,
-          borderRadius:9, padding:"8px 12px", marginBottom:10,
-          opacity: canAdd ? 1 : 0.65,
-        }}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:9, padding:"8px 12px", marginBottom:10}}>
           <div style={{display:"flex", alignItems:"center", gap:7}}>
             <span style={{width:7, height:7, borderRadius:"50%", background:pickColor(game.pick), flexShrink:0}}/>
-            <span style={{fontSize:12, fontWeight:700, color:canAdd ? COLORS.green : COLORS.text1}}>AI: {pickName(game.pick)}</span>
+            <span style={{fontSize:12, fontWeight:700, color:COLORS.green}}>AI: {pickName(game.pick)}</span>
           </div>
           <div style={{display:"flex", alignItems:"center", gap:6}}>
-            <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"1px 8px"}}>
-              {oddsFor(game, game.pick).toFixed(2)}
-            </span>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"1px 8px"}}>{oddsFor(game, game.pick).toFixed(2)}</span>
             <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, color:cm.c, fontWeight:800}}>{game.conf}%</span>
           </div>
         </div>
 
-        {/* ── Confidence bar ── */}
         <div style={{marginBottom:10}}>
           <div style={{height:3, background:COLORS.bg3, borderRadius:99, overflow:"hidden"}}>
             <div style={{width:`${game.conf}%`, height:"100%", background:cm.c, borderRadius:99, transition:"width .5s ease"}}/>
@@ -1526,24 +1542,11 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, delay=0}) {
         </div>
       </div>
 
-      {/* ── Footer action row ── */}
       <div style={{display:"flex", borderTop:`1px solid ${COLORS.border}`}}>
-        {canAdd ? (
-          <button className="btn" onClick={() => onAdd(game.pick)}
-            style={{flex:1, padding:"11px 14px", background:inSlip?COLORS.greenFaint:"transparent",
-              borderRight:`1px solid ${COLORS.border}`, fontSize:11, fontWeight:800,
-              letterSpacing:"0.07em", color:inSlip?COLORS.green:COLORS.text2}}>
-            {inSlip ? "✓ IN SLIP" : "+ ADD TO SLIP"}
-          </button>
-        ) : (
-          <div style={{flex:1, padding:"11px 14px", borderRight:`1px solid ${COLORS.border}`,
-            fontSize:11, fontWeight:800, letterSpacing:"0.07em", textAlign:"center",
-            color: isLive ? COLORS.green : COLORS.text2,
-            background: isLive ? COLORS.greenFaint : "transparent",
-          }}>
-            {isLive ? "🟢 IN PLAY — BETTING CLOSED" : "⏹ FULL TIME — BETTING CLOSED"}
-          </div>
-        )}
+        <button className="btn" onClick={() => onAdd(game.pick)}
+          style={{flex:1, padding:"11px 14px", background:inSlip?COLORS.greenFaint:"transparent", borderRight:`1px solid ${COLORS.border}`, fontSize:11, fontWeight:800, letterSpacing:"0.07em", color:inSlip?COLORS.green:COLORS.text2}}>
+          {inSlip ? "✓ IN SLIP" : "+ ADD TO SLIP"}
+        </button>
         <button className="btn" onClick={onExpand}
           style={{padding:"11px 14px", fontSize:10, color:COLORS.text2, fontWeight:700, letterSpacing:"0.06em", display:"flex", alignItems:"center", gap:4}}>
           {expanded ? "▲" : "▼"} ANALYSIS
