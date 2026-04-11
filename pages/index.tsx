@@ -1,10 +1,10 @@
-// pages/index.tsx — BetAI Landing Page (fully responsive)
-import { useState, useEffect } from 'react';
+// pages/index.tsx — BetAI Landing Page (matched to dashboard UI)
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { GetServerSideProps } from 'next';
 import { getSession } from '../lib/auth';
 
-/* ─── Design tokens ─── */
+/* ─── Design tokens — identical to the dashboard ─── */
 const C = {
   bg0: '#070810',
   bg1: '#0c0d1a',
@@ -32,41 +32,42 @@ const C = {
 };
 
 const STATS = [
-  { icon: '🎯', label: 'AI Win Rate',    value: '74%',    sub: 'Last 30 days' },
-  { icon: '⚽', label: "Today's Tips",   value: '32',     sub: 'Across 6 leagues' },
-  { icon: '📈', label: 'Avg Confidence', value: '79%',    sub: 'Per prediction' },
-  { icon: '👥', label: 'Active Users',   value: '1,200+', sub: 'Subscribers' },
+  { icon: '🎯', label: 'AI Win Rate',     value: '74%',   sub: 'Last 30 days' },
+  { icon: '⚽', label: "Today's Tips",    value: '32',    sub: 'Across 6 leagues' },
+  { icon: '📈', label: 'Avg Confidence', value: '79%',   sub: 'Per prediction' },
+  { icon: '👥', label: 'Active Users',   value: '1,200+',sub: 'Subscribers' },
 ];
 
 const FEATURES = [
-  { icon: '◈', title: 'Gemini AI Engine',   desc: 'Powered by Google Gemini AI — analyses team form, H2H records, injuries, odds movement, and tactical patterns in seconds.' },
-  { icon: '◎', title: 'Real-Time Fixtures', desc: 'Live data from Premier League, La Liga, Bundesliga, Serie A, Ligue 1 and Champions League, refreshed continuously.' },
-  { icon: '◐', title: 'Confidence Scoring', desc: 'Every prediction carries an ELITE / HIGH / MED rating so you always know the signal strength before placing.' },
-  { icon: '◑', title: 'Promo-Gated Access', desc: 'Exclusive promo code system ensures only serious bettors access our premium AI tips. No free rides.' },
+  { icon: '◈', title: 'Gemini AI Engine',    desc: 'Powered by Google Gemini AI — analyses team form, H2H records, injuries, odds movement, and tactical patterns in seconds.' },
+  { icon: '◎', title: 'Real-Time Fixtures',  desc: 'Live data from Premier League, La Liga, Bundesliga, Serie A, Ligue 1 and Champions League, refreshed continuously.' },
+  { icon: '◐', title: 'Confidence Scoring',  desc: 'Every prediction carries an ELITE / HIGH / MED rating so you always know the signal strength before placing.' },
+  { icon: '◑', title: 'Promo-Gated Access',  desc: 'Exclusive promo code system ensures only serious bettors access our premium AI tips. No free rides.' },
 ];
 
 const SAMPLE = [
-  { league: 'Champions League', flag: '⭐',   home: 'Arsenal',      away: 'Sporting CP',   display: 'Tue 7 Apr · 22:00',  round: 'QF Leg 1' },
-  { league: 'La Liga',          flag: '🇪🇸', home: 'FC Barcelona', away: 'Espanyol',      display: 'Sat 11 Apr · 19:30', round: 'Matchday 33' },
-  { league: 'Bundesliga',       flag: '🇩🇪', home: 'FC St. Pauli', away: 'Bayern Munich', display: 'Sat 11 Apr · 19:30', round: 'Matchday 30' },
-  { league: 'Premier League',   flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', home: 'Arsenal',      away: 'Bournemouth',   display: 'Sat 11 Apr · 14:30', round: 'GW35' },
-  { league: 'Champions League', flag: '⭐',   home: 'PSG',          away: 'Liverpool',     display: 'Wed 8 Apr · 22:00',  round: 'QF Leg 1' },
+  { league: 'Champions League', flag: '⭐', home: 'Arsenal',        away: 'Sporting CP',   display: 'Tue 7 Apr · 22:00', round: 'QF Leg 1' },
+  { league: 'La Liga',          flag: '🇪🇸', home: 'FC Barcelona',   away: 'Espanyol',      display: 'Sat 11 Apr · 19:30', round: 'Matchday 33' },
+  { league: 'Bundesliga',       flag: '🇩🇪', home: 'FC St. Pauli',   away: 'Bayern Munich', display: 'Sat 11 Apr · 19:30', round: 'Matchday 30' },
+  { league: 'Premier League',   flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', home: 'Arsenal',        away: 'Bournemouth',   display: 'Sat 11 Apr · 14:30', round: 'GW35' },
+  { league: 'Champions League', flag: '⭐', home: 'PSG',             away: 'Liverpool',     display: 'Wed 8 Apr · 22:00', round: 'QF Leg 1' },
 ];
 
 const LEAGUES = [
-  { name: 'Premier League',   flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
-  { name: 'La Liga',          flag: '🇪🇸' },
-  { name: 'Bundesliga',       flag: '🇩🇪' },
-  { name: 'Serie A',          flag: '🇮🇹' },
-  { name: 'Ligue 1',          flag: '🇫🇷' },
-  { name: 'Champions League', flag: '⭐' },
+  { name: 'Premier League',    flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+  { name: 'La Liga',           flag: '🇪🇸' },
+  { name: 'Bundesliga',        flag: '🇩🇪' },
+  { name: 'Serie A',           flag: '🇮🇹' },
+  { name: 'Ligue 1',           flag: '🇫🇷' },
+  { name: 'Champions League',  flag: '⭐' },
 ];
 
 const STEPS = [
-  { n: '01', title: 'Get a Promo Code',   desc: 'Purchase a premium access code. Contact us via email or WhatsApp to get yours.' },
-  { n: '02', title: 'Create Account',     desc: 'Sign up with your email and activate your subscription using the promo code.' },
-  { n: '03', title: 'Receive Daily Tips', desc: 'Log in every day to see AI-generated predictions with confidence ratings and analysis.' },
+  { n: '01', title: 'Get a Promo Code',    desc: 'Purchase a premium access code. Contact us via email or WhatsApp to get yours.' },
+  { n: '02', title: 'Create Account',      desc: 'Sign up with your email and activate your subscription using the promo code.' },
+  { n: '03', title: 'Receive Daily Tips',  desc: 'Log in every day to see AI-generated predictions with confidence ratings and analysis.' },
 ];
+
 
 export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
   const [scrolled, setScrolled] = useState(false);
@@ -81,21 +82,18 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
     <div style={{ background: C.bg0, color: C.text0, fontFamily: "'Barlow', system-ui, sans-serif", fontWeight: 400 }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@600;700;800;900&display=swap');
-
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html { -webkit-text-size-adjust: 100%; }
         body { overflow-x: hidden; }
         a { text-decoration: none; color: inherit; }
         button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
-        img { max-width: 100%; display: block; }
-
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
 
-        @keyframes fadeUp    { from { opacity:0; transform:translateY(14px) } to { opacity:1; transform:translateY(0) } }
-        @keyframes pulse     { 0%,100%{opacity:1} 50%{opacity:.35} }
-        @keyframes ticker    { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+        @keyframes fadeUp   { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:.35} }
+        @keyframes glowOrange { 0%,100%{box-shadow:0 0 0 0 rgba(255,109,0,0.3)} 50%{box-shadow:0 0 20px 4px rgba(255,109,0,0.12)} }
+        @keyframes ticker   { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
 
         .fade-1 { animation: fadeUp .4s ease both; }
         .fade-2 { animation: fadeUp .4s .08s ease both; }
@@ -110,181 +108,30 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
         .conf-elite { background: rgba(255,215,64,0.12); border: 1px solid rgba(255,215,64,0.30); color: #ffd740; }
         .conf-high  { background: rgba(0,230,118,0.08);  border: 1px solid rgba(0,230,118,0.22); color: #00e676; }
         .conf-med   { background: rgba(68,138,255,0.10); border: 1px solid rgba(68,138,255,0.30); color: #448aff; }
-
-        /* ── HERO GRID ── */
-        .hero-grid {
-          display: grid;
-          grid-template-columns: 1fr 340px;
-          gap: 3rem;
-          align-items: center;
-        }
-
-        /* ── STATS GRID ── */
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-        }
-        .stat-cell {
-          padding: 28px 24px;
-          text-align: center;
-        }
-        .stat-cell:not(:last-child) {
-          border-right: 1px solid rgba(255,255,255,0.07);
-        }
-
-        /* ── FEATURES GRID ── */
-        .features-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 1px;
-          background: rgba(255,255,255,0.07);
-          border: 1px solid rgba(255,255,255,0.07);
-        }
-
-        /* ── LEAGUES GRID ── */
-        .leagues-grid {
-          display: grid;
-          grid-template-columns: repeat(6, 1fr);
-          gap: 1px;
-          background: rgba(255,255,255,0.07);
-          border: 1px solid rgba(255,255,255,0.07);
-        }
-
-        /* ── STEPS GRID ── */
-        .steps-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 1px;
-          background: rgba(255,255,255,0.07);
-          border: 1px solid rgba(255,255,255,0.07);
-        }
-
-        /* ── FOOTER ── */
-        .footer-inner {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-        .footer-links {
-          display: flex;
-          gap: 16px;
-        }
-
-        /* ════════════════════════════════════════
-           TABLET  (≤ 900px)
-        ════════════════════════════════════════ */
-        @media (max-width: 900px) {
-          .hero-grid {
-            grid-template-columns: 1fr;
-          }
-          .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-          .stat-cell:nth-child(2) {
-            border-right: none;
-          }
-          .stat-cell:nth-child(1),
-          .stat-cell:nth-child(2) {
-            border-bottom: 1px solid rgba(255,255,255,0.07);
-          }
-          .features-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-          .leagues-grid {
-            grid-template-columns: repeat(3, 1fr);
-          }
-          .steps-grid {
-            grid-template-columns: 1fr;
-          }
-          .footer-inner {
-            flex-direction: column;
-            text-align: center;
-          }
-        }
-
-        /* ════════════════════════════════════════
-           MOBILE  (≤ 600px)
-        ════════════════════════════════════════ */
-        @media (max-width: 600px) {
-          /* Nav */
-          .nav-inner { padding: 0 16px !important; }
-          .nav-logo-sub { display: none; }
-
-          /* Ticker */
-          .ticker-wrap { height: 24px !important; }
-          .ticker-item { padding: 0 14px !important; }
-
-          /* Hero */
-          .hero-section { padding: 48px 16px !important; }
-          .hero-badges  { flex-wrap: wrap; }
-
-          /* Stats */
-          .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-          .stat-cell { padding: 20px 12px; }
-
-          /* Features */
-          .features-grid { grid-template-columns: 1fr; }
-          .feature-cell  { padding: 22px 18px !important; }
-
-          /* Leagues */
-          .leagues-grid { grid-template-columns: repeat(2, 1fr); }
-
-          /* Steps */
-          .steps-grid { grid-template-columns: 1fr; }
-          .step-divider { display: none !important; }
-
-          /* Sections */
-          .section-pad  { padding: 4rem 16px !important; }
-          .section-pad5 { padding: 3.5rem 16px !important; }
-
-          /* CTA */
-          .cta-btn { width: 100%; text-align: center; }
-
-          /* Footer */
-          .footer-inner { flex-direction: column; text-align: center; gap: 10px; }
-          .footer-copy  { order: 3; }
-          .footer-links { order: 2; }
-        }
-
-        /* ════════════════════════════════════════
-           VERY SMALL  (≤ 380px)
-        ════════════════════════════════════════ */
-        @media (max-width: 380px) {
-          .stats-grid { grid-template-columns: 1fr 1fr; }
-          .leagues-grid { grid-template-columns: repeat(2, 1fr); }
-          .nav-get-access { display: none; }
-        }
       `}</style>
 
       {/* ═══ NAV ═══════════════════════════════════════════════ */}
-      <nav
-        className="nav-inner"
-        style={{
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-          height: 56,
-          background: scrolled ? 'rgba(7,8,16,0.97)' : 'rgba(7,8,16,0.6)',
-          backdropFilter: 'blur(20px)',
-          borderBottom: `1px solid ${scrolled ? C.border : 'transparent'}`,
-          transition: 'all .3s ease',
-          display: 'flex', alignItems: 'center', padding: '0 24px',
-          justifyContent: 'space-between', gap: 12,
-        }}
-      >
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+        height: 56,
+        background: scrolled ? 'rgba(7,8,16,0.97)' : 'rgba(7,8,16,0.6)',
+        backdropFilter: 'blur(20px)',
+        borderBottom: `1px solid ${scrolled ? C.border : 'transparent'}`,
+        transition: 'all .3s ease',
+        display: 'flex', alignItems: 'center', padding: '0 24px',
+        justifyContent: 'space-between', gap: 12,
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 34, height: 34, borderRadius: 9,
             background: `linear-gradient(135deg,${C.green},#00897b)`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
-            flexShrink: 0,
           }}>⚡</div>
           <div>
             <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.02em', lineHeight: 1 }}>
               BET<span style={{ color: C.green }}>AI</span>
             </div>
-            <div className="nav-logo-sub" style={{ fontSize: 9, color: C.text2, letterSpacing: '0.12em' }}>PREDICTION ENGINE</div>
+            <div style={{ fontSize: 9, color: C.text2, letterSpacing: '0.12em' }}>PREDICTION ENGINE</div>
           </div>
         </div>
 
@@ -302,14 +149,12 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
                 padding: '7px 16px', borderRadius: 8,
                 border: `1px solid ${C.border}`,
                 color: C.text1, fontSize: 12, fontWeight: 600, letterSpacing: '0.06em',
-                whiteSpace: 'nowrap',
               }}>SIGN IN</Link>
-              <Link href="/auth/signup" className="nav-get-access" style={{
+              <Link href="/auth/signup" style={{
                 padding: '8px 20px', borderRadius: 9,
                 background: `linear-gradient(90deg,${C.green},${C.greenD})`,
                 color: C.bg0, fontFamily: "'Barlow Condensed',sans-serif",
                 fontWeight: 900, fontSize: 13, letterSpacing: '0.06em',
-                whiteSpace: 'nowrap',
               }}>GET ACCESS</Link>
             </>
           )}
@@ -317,24 +162,17 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
       </nav>
 
       {/* ═══ TICKER ═════════════════════════════════════════════ */}
-      <div
-        className="ticker-wrap"
-        style={{
-          position: 'fixed', top: 56, left: 0, right: 0, zIndex: 99,
-          height: 28, background: C.bg1,
-          borderBottom: `1px solid ${C.border}`,
-          overflow: 'hidden', display: 'flex', alignItems: 'center',
-        }}
-      >
+      <div style={{
+        position: 'fixed', top: 56, left: 0, right: 0, zIndex: 99,
+        height: 28, background: C.bg1,
+        borderBottom: `1px solid ${C.border}`,
+        overflow: 'hidden', display: 'flex', alignItems: 'center',
+      }}>
         <div style={{ display: 'flex', animation: 'ticker 28s linear infinite', whiteSpace: 'nowrap' }}>
           {[...Array(2)].map((_, ri) => (
             <span key={ri}>
               {SAMPLE.concat(SAMPLE).map((s, i) => (
-                <span
-                  key={i}
-                  className="ticker-item"
-                  style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.05em', padding: '0 20px', color: C.text2 }}
-                >
+                <span key={i} style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.05em', padding: '0 20px', color: C.text2 }}>
                   {s.flag} <span style={{ color: C.text1 }}>{s.home}</span>
                   <span style={{ color: C.text2, margin: '0 5px' }}>vs</span>
                   <span style={{ color: C.text1 }}>{s.away}</span>
@@ -363,8 +201,8 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
                        radial-gradient(ellipse 40% 40% at 80% 80%, rgba(255,109,0,0.04) 0%, transparent 60%)`,
         }}/>
 
-        <div className="hero-section" style={{ maxWidth: 1100, margin: '0 auto', padding: '60px 24px', width: '100%' }}>
-          <div className="hero-grid">
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '60px 24px', width: '100%' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '3rem', alignItems: 'center' }}>
 
             {/* Left */}
             <div>
@@ -377,7 +215,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
                 <span style={{
                   width: 8, height: 8, borderRadius: '50%', background: C.green,
                   boxShadow: `0 0 0 3px rgba(0,230,118,0.2)`,
-                  animation: 'pulse 1.8s ease infinite', display: 'block', flexShrink: 0,
+                  animation: 'pulse 1.8s ease infinite', display: 'block',
                 }}/>
                 <span style={{ fontSize: 10, color: C.green, fontWeight: 800, letterSpacing: '0.12em' }}>AI PREDICTIONS LIVE</span>
               </div>
@@ -385,7 +223,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
               <h1 className="fade-2" style={{
                 fontFamily: "'Barlow Condensed',sans-serif",
                 fontWeight: 900, letterSpacing: '0.01em',
-                fontSize: 'clamp(3rem,6vw,5.5rem)',
+                fontSize: 'clamp(3.2rem,6vw,5.5rem)',
                 lineHeight: 0.95, marginBottom: 24,
                 textTransform: 'uppercase',
               }}>
@@ -398,20 +236,18 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
                 Our Gemini AI engine analyses thousands of data points across Europe's top leagues to deliver high-confidence football predictions daily.
               </p>
 
-              <div className="fade-4 hero-badges" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 36 }}>
+              <div className="fade-4" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 36 }}>
                 <Link href="/auth/signup" className="btn" style={{
                   padding: '12px 28px', borderRadius: 10,
                   background: `linear-gradient(90deg,${C.green},${C.greenD})`,
                   color: C.bg0, fontFamily: "'Barlow Condensed',sans-serif",
                   fontWeight: 900, fontSize: 15, letterSpacing: '0.07em',
-                  whiteSpace: 'nowrap',
                 }}>START WINNING TODAY →</Link>
                 <Link href="/auth/login" style={{
                   padding: '12px 22px', borderRadius: 10,
                   border: `1px solid ${C.border}`,
                   color: C.text1, fontSize: 13, fontWeight: 600, letterSpacing: '0.06em',
                   display: 'flex', alignItems: 'center',
-                  whiteSpace: 'nowrap',
                 }}>SIGN IN</Link>
               </div>
 
@@ -422,7 +258,6 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
                     fontSize: 10, fontWeight: 700, letterSpacing: '0.07em',
                     padding: '4px 12px', borderRadius: 999,
                     background: C.bg2, border: `1px solid ${C.border}`, color: C.text2,
-                    whiteSpace: 'nowrap',
                   }}>{l.flag} {l.name.toUpperCase()}</span>
                 ))}
               </div>
@@ -470,22 +305,26 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
                       fontSize: 9, color: C.green, fontWeight: 800, letterSpacing: '0.08em',
                       background: C.greenFaint, border: `1px solid ${C.greenBorder}`,
                       borderRadius: 4, padding: '1px 6px',
-                      whiteSpace: 'nowrap',
                     }}>SIGN IN TO VIEW TIPS</span>
                   </div>
                 </div>
               ))}
             </div>
-
           </div>
         </div>
       </section>
 
       {/* ═══ STATS BAR ══════════════════════════════════════════ */}
       <section style={{ background: C.bg1, borderBottom: `1px solid ${C.border}` }}>
-        <div className="stats-grid" style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{
+          maxWidth: 1100, margin: '0 auto',
+          display: 'grid', gridTemplateColumns: 'repeat(4,1fr)',
+        }}>
           {STATS.map((s, i) => (
-            <div key={i} className="stat-cell">
+            <div key={i} style={{
+              padding: '28px 24px', textAlign: 'center',
+              borderRight: i < 3 ? `1px solid ${C.border}` : 'none',
+            }}>
               <div style={{ fontSize: 20, marginBottom: 10 }}>{s.icon}</div>
               <div style={{
                 fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 900,
@@ -500,7 +339,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
       </section>
 
       {/* ═══ FEATURES ═══════════════════════════════════════════ */}
-      <section id="features" className="section-pad" style={{ padding: '6rem 24px', borderBottom: `1px solid ${C.border}` }}>
+      <section id="features" style={{ padding: '6rem 24px', borderBottom: `1px solid ${C.border}` }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div style={{ marginBottom: 40 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -512,9 +351,9 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
             </h2>
           </div>
 
-          <div className="features-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 1, background: C.border, border: `1px solid ${C.border}` }}>
             {FEATURES.map((f, i) => (
-              <div key={i} className="card-hover feature-cell" style={{ background: C.bg1, padding: '28px 24px' }}>
+              <div key={i} className="card-hover" style={{ background: C.bg1, padding: '28px 24px' }}>
                 <div style={{ fontSize: 28, color: C.green, marginBottom: 18, lineHeight: 1 }}>{f.icon}</div>
                 <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 16, letterSpacing: '0.04em', marginBottom: 10, color: C.text0 }}>{f.title.toUpperCase()}</div>
                 <p style={{ fontSize: 12, color: C.text1, lineHeight: 1.8 }}>{f.desc}</p>
@@ -525,7 +364,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
       </section>
 
       {/* ═══ LEAGUES ════════════════════════════════════════════ */}
-      <section id="leagues" className="section-pad5" style={{ padding: '5rem 24px', background: C.bg1, borderBottom: `1px solid ${C.border}` }}>
+      <section id="leagues" style={{ padding: '5rem 24px', background: C.bg1, borderBottom: `1px solid ${C.border}` }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{ width: 4, height: 22, borderRadius: 2, background: C.blue }}/>
@@ -534,7 +373,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
           <h2 style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 900, fontSize: 'clamp(2rem,4vw,3rem)', textTransform: 'uppercase', marginBottom: 32 }}>
             6 elite competitions. <span style={{ color: C.green }}>Daily.</span>
           </h2>
-          <div className="leagues-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 1, background: C.border, border: `1px solid ${C.border}` }}>
             {LEAGUES.map((l, i) => (
               <div key={i} className="card-hover" style={{
                 background: C.bg0, padding: '24px 16px', textAlign: 'center',
@@ -549,7 +388,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
       </section>
 
       {/* ═══ HOW IT WORKS ═══════════════════════════════════════ */}
-      <section id="how-it-works" className="section-pad" style={{ padding: '6rem 24px', borderBottom: `1px solid ${C.border}` }}>
+      <section id="how-it-works" style={{ padding: '6rem 24px', borderBottom: `1px solid ${C.border}` }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{ width: 4, height: 22, borderRadius: 2, background: C.gold }}/>
@@ -559,7 +398,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
             Up and running in <span style={{ color: C.green }}>3 steps.</span>
           </h2>
 
-          <div className="steps-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 1, background: C.border, border: `1px solid ${C.border}` }}>
             {STEPS.map((s, i) => (
               <div key={i} style={{ background: C.bg1, padding: '28px 24px', position: 'relative' }}>
                 <div style={{
@@ -576,7 +415,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
                 </div>
                 <p style={{ fontSize: 12, color: C.text1, lineHeight: 1.8 }}>{s.desc}</p>
                 {i < 2 && (
-                  <div className="step-divider" style={{
+                  <div style={{
                     position: 'absolute', right: -1, top: '25%', bottom: '25%',
                     width: 1, background: `linear-gradient(to bottom, transparent, ${C.green}, transparent)`,
                     opacity: 0.2,
@@ -589,7 +428,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
       </section>
 
       {/* ═══ CTA ════════════════════════════════════════════════ */}
-      <section className="section-pad" style={{
+      <section style={{
         padding: '6rem 24px', background: C.bg1,
         borderBottom: `1px solid ${C.border}`,
         position: 'relative', overflow: 'hidden', textAlign: 'center',
@@ -613,7 +452,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
           <p style={{ fontSize: 14, color: C.text1, marginBottom: 36, lineHeight: 1.7 }}>
             Join over 1,200 subscribers already using BetAI to make smarter decisions.
           </p>
-          <Link href="/auth/signup" className="btn cta-btn" style={{
+          <Link href="/auth/signup" className="btn" style={{
             display: 'inline-block',
             padding: '14px 40px', borderRadius: 10,
             background: `linear-gradient(90deg,${C.green},${C.greenD})`,
@@ -626,28 +465,26 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
 
       {/* ═══ FOOTER ═════════════════════════════════════════════ */}
       <footer style={{
-        borderTop: `1px solid ${C.border}`,
-        padding: '20px 24px',
+        borderTop: `1px solid ${C.border}`, padding: '20px 24px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         background: C.bg0,
       }}>
-        <div className="footer-inner">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 7,
-              background: `linear-gradient(135deg,${C.green},#00897b)`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15,
-            }}>⚡</div>
-            <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 900, fontSize: 18, letterSpacing: '0.02em' }}>
-              BET<span style={{ color: C.green }}>AI</span>
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 7,
+            background: `linear-gradient(135deg,${C.green},#00897b)`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15,
+          }}>⚡</div>
+          <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 900, fontSize: 18, letterSpacing: '0.02em' }}>
+            BET<span style={{ color: C.green }}>AI</span>
           </div>
-          <p className="footer-copy" style={{ fontSize: 10, color: C.text2, textAlign: 'center' }}>
-            © {new Date().getFullYear()} BetAI · For entertainment purposes only · Please gamble responsibly
-          </p>
-          <div className="footer-links">
-            <Link href="/auth/login"  style={{ fontSize: 11, color: C.text2, fontWeight: 600, letterSpacing: '0.06em' }}>SIGN IN</Link>
-            <Link href="/auth/signup" style={{ fontSize: 11, color: C.green,  fontWeight: 700, letterSpacing: '0.06em' }}>GET ACCESS</Link>
-          </div>
+        </div>
+        <p style={{ fontSize: 10, color: C.text2, textAlign: 'center' }}>
+          © {new Date().getFullYear()} BetAI · For entertainment purposes only · Please gamble responsibly
+        </p>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <Link href="/auth/login"  style={{ fontSize: 11, color: C.text2, fontWeight: 600, letterSpacing: '0.06em' }}>SIGN IN</Link>
+          <Link href="/auth/signup" style={{ fontSize: 11, color: C.green,  fontWeight: 700, letterSpacing: '0.06em' }}>GET ACCESS</Link>
         </div>
       </footer>
     </div>

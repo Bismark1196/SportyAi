@@ -48,7 +48,7 @@ function sortFixtures(fixtures: LiveFixture[]): LiveFixture[] {
 
 export function useLiveScores(): LiveScoresState {
   const [state, setState] = useState<LiveScoresState>({
-    scoresById: {},
+    scoresById: {} as Record<string, LiveFixture>,
     scores: [],
     connected: false,
     hasLive: false,
