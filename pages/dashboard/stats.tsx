@@ -67,7 +67,6 @@ export default function StatsPage({ stats, user }: StatsPageProps) {
   return (
     <div style={{ background:C.bg0, color:C.text0, minHeight:'100vh', fontFamily:"'Barlow', system-ui, sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@700;800;900&display=swap');
         *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
         a { text-decoration:none; color:inherit; }
         ::-webkit-scrollbar { width:4px; }

@@ -65,8 +65,6 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
     <div style={{ background: C.bg0, color: C.text0, fontFamily: "'Barlow', system-ui, sans-serif", fontWeight: 400 }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@700;800;900&display=swap');
-
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { overflow-x: hidden; }
         a    { text-decoration: none; color: inherit; }
@@ -551,7 +549,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
           </div>
 
           {/* Legal */}
-          <p className="footer-legal" style={{ fontSize: 10, color: C.text2 }}>
+          <p className="footer-legal" style={{ fontSize: 10, color: C.text2 }} suppressHydrationWarning>
             © {new Date().getFullYear()} BetAI · For entertainment purposes only · Please gamble responsibly
           </p>
 
@@ -568,5 +566,11 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const session = await getSession(ctx.req);
-  return { props: { isLoggedIn: !!session } };
+  // Already logged in → send straight to dashboard
+  if (session) {
+    return {
+      redirect: { destination: '/dashboard', permanent: false },
+    };
+  }
+  return { props: { isLoggedIn: false } };
 };
