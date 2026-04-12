@@ -260,8 +260,21 @@ const GAMES = [
 /* ── HELPERS ──────────────────────────────────────────────── */
 const LS = "betai_v5";
 const persist = {
-  load: () => { try { const r=localStorage.getItem(LS); return r?JSON.parse(r):null; } catch{return null;} },
-  save: d => { try { localStorage.setItem(LS, JSON.stringify(d)); } catch{} }
+  load: () => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(LS);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+  save: d => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(LS, JSON.stringify(d));
+    } catch {}
+  }
 };
 
 const oddsFor = (g, p) => p==="home_win"?g.odds.h : p==="draw"?g.odds.d : g.odds.a;
@@ -308,6 +321,14 @@ const formatLiveCountdown = liveData => {
   const target = liveData.statusShort === "ET" || liveData.statusShort === "P" ? 120 : 90;
   const remaining = Math.max(target - liveData.elapsed, 0);
   return `${remaining}m left`;
+};
+
+const formatLastUpdated = ts => {
+  if (!ts) return null;
+  return new Date(ts).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 /* ── DATE HELPERS ─────────────────────────────────────────── */
@@ -609,6 +630,7 @@ export default function App() {
   const displayedMega = todayMega.length > 0 ? todayMega : (nextMegaDateKey ? MEGA.filter(m => toDateKey(m.kick) === nextMegaDateKey) : []);
   const megaDateLabel = todayMega.length > 0 ? "TODAY" : (nextMegaDateKey ? formatDateLabel(nextMegaDateKey) : "");
   const megaCount = displayedMega.length;
+  const liveUpdatedLabel = formatLastUpdated(lastUpdated);
 
   const logoutBtnStyle = {
     display:"flex", alignItems:"center", gap:6,
@@ -624,7 +646,6 @@ export default function App() {
   return (
     <div style={{background:COLORS.bg0, color:COLORS.text0, minHeight:"100vh", fontFamily:"'Barlow', system-ui, sans-serif"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@600;700;800;900&display=swap');
         *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
         body { overflow-x:hidden; }
         button { font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
@@ -852,6 +873,17 @@ export default function App() {
             <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.06em", display:"flex", alignItems:"center", gap:5}}>
               <span style={{width:5, height:5, borderRadius:"50%", background:COLORS.text2, display:"block"}}/>
               CONNECTING
+            </div>
+          )}
+          {liveConnected && liveUpdatedLabel && (
+            <div style={{
+              fontSize:9,
+              color:COLORS.text2,
+              letterSpacing:"0.06em",
+              fontWeight:600,
+              padding:"4px 0",
+            }}>
+              Updated {liveUpdatedLabel}
             </div>
           )}
           {toast && toast.type==="ok" && <div style={{fontSize:11, color:COLORS.green, background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:20, padding:"5px 14px", fontWeight:600, animation:"fadeIn .2s ease"}}>{toast.msg}</div>}
