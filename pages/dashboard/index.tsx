@@ -22,7 +22,35 @@ const COLORS = {
 };
 
 /* ── DATA ─────────────────────────────────────────────────── */
-const GAMES = [
+/* ── TYPES ────────────────────────────────────────────────── */
+interface GameOdds  { h: number; d: number; a: number; }
+interface GameProb  { h: number; d: number; a: number; }
+interface GameForm  { h: string; a: string; }
+interface GameScore { h: number; a: number; }
+
+interface Game {
+  id: string;
+  cat: string;
+  league: string;
+  flag: string;
+  round: string;
+  home: string;
+  away: string;
+  kick: string;
+  display: string;
+  st: string;
+  pick: string;
+  conf: number;
+  odds: GameOdds;
+  prob?: GameProb;
+  form?: GameForm;
+  h2h?: string;
+  tips?: string[];
+  analysis?: string;
+  score?: GameScore;
+}
+
+const GAMES: Game[] = [
   // UCL
   { id:"u1", cat:"UCL", league:"Champions League", flag:"⭐", round:"QF Leg 1",
     home:"Real Madrid", away:"Bayern Munich",
@@ -239,7 +267,7 @@ const GAMES = [
 ];
 
 /* ── DYNAMIC MEGA PICKS: auto-select mid/high confidence upcoming games ── */
-const getMegaPicks = () => {
+const getMegaPicks = (): { picks: Game[]; dateKey: string } => {
   const now = new Date();
   const todayKey = now.toISOString().slice(0, 10);
   
@@ -259,7 +287,7 @@ const getMegaPicks = () => {
 
   // Otherwise find the next upcoming date with high-conf games
   const futureCandidates = candidates.filter(g => g.kick.slice(0, 10) > todayKey);
-  if (futureCandidates.length === 0) return { picks: [], dateKey: todayKey };
+  if (futureCandidates.length === 0) return { picks: [] as Game[], dateKey: todayKey };
   
   const nextDateKey = futureCandidates[0].kick.slice(0, 10);
   const nextDatePicks = futureCandidates.filter(g => g.kick.slice(0, 10) === nextDateKey).slice(0, 3);
@@ -424,7 +452,7 @@ export default function App() {
     return scoreMap.get(key);
   }, [scoreMap]);
 
-  const resolvedGames = useMemo(() => {
+  const resolvedGames = useMemo((): Game[] => {
     const currentTick = tick;
     return GAMES.map(g => {
       void currentTick;
@@ -642,7 +670,7 @@ export default function App() {
   const megaCount = megaPicks.length;
 
   // Resolve mega picks against live game state
-  const resolvedMegaPicks = megaPicks.map(m => {
+  const resolvedMegaPicks: Game[] = megaPicks.map(m => {
     const rg = resolvedGames.find(g => g.id === m.id);
     return rg || m;
   });
