@@ -20,6 +20,27 @@ const COLORS = {
 };
 
 /* ── DATA ─────────────────────────────────────────────────── */
+const MEGA = [
+  { id:"mg1", league:"Champions League", flag:"⭐",
+    home:"Sporting CP", away:"Arsenal",
+    kick:"2026-04-07T19:00:00Z", display:"Tue 7 Apr · 22:00 EAT",
+    pick:"away_win", pickLabel:"Arsenal Win", odds:1.85, conf:92,
+    analysis:"Arsenal are dominant away in Europe — zero defeats in 8 UCL away matches this season. Sporting conceded 5 at the Emirates and their home record in Europe is poor. The Gunners are the standout banker.",
+    tips:["Arsenal: 8 UCL away games unbeaten","Sporting conceded 5 in the reverse fixture","Arsenal away xGA = 0.6/game (UCL best)"] },
+  { id:"mg2", league:"La Liga", flag:"🇪🇸",
+    home:"FC Barcelona", away:"Espanyol",
+    kick:"2026-04-11T16:30:00Z", display:"Sat 11 Apr · 19:30 EAT",
+    pick:"home_win", pickLabel:"Barcelona Win", odds:1.28, conf:95,
+    analysis:"Camp Nou derby is a mismatch. Barcelona on a 7-match winning streak, Espanyol fighting relegation with just 1 win in 9. The Blaugrana have won the last 5 home derbies by 3+ goals.",
+    tips:["Barcelona: 7 consecutive wins","Espanyol: 1 win in last 9 games","Barça won last 5 derbies by 3+ goals"] },
+  { id:"mg3", league:"Bundesliga", flag:"🇩🇪",
+    home:"FC St. Pauli", away:"Bayern Munich",
+    kick:"2026-04-11T16:30:00Z", display:"Sat 11 Apr · 19:30 EAT",
+    pick:"away_win", pickLabel:"Bayern Win", odds:1.30, conf:94,
+    analysis:"St. Pauli have the worst home record in the Bundesliga. Bayern have won 11 consecutive away games and are in a title race. This is as close to a certainty as football allows.",
+    tips:["Bayern: 11 consecutive away wins","St.Pauli: worst home record in Bundesliga","Bayern scored 3+ in 9 of last 10 away games"] },
+];
+
 const GAMES = [
   // UCL
   { id:"u1", cat:"UCL", league:"Champions League", flag:"⭐", round:"QF Leg 1",
@@ -236,34 +257,6 @@ const GAMES = [
     score:{h:2,a:3}, pick:"away_win", conf:86, odds:{h:4.20,d:3.60,a:1.70} },
 ];
 
-/* ── DYNAMIC MEGA PICKS: auto-select mid/high confidence upcoming games ── */
-const getMegaPicks = () => {
-  const now = new Date();
-  const todayKey = now.toISOString().slice(0, 10);
-  
-  // Get all upcoming games with conf >= 65 (mid to high confidence)
-  const candidates = GAMES
-    .filter(g => g.st !== "result" && !g.score)
-    .filter(g => g.conf >= 65)
-    .sort((a, b) => b.conf - a.conf);
-
-  // Try to get today's games first
-  const todayCandidates = candidates.filter(g => g.kick.slice(0, 10) === todayKey);
-  
-  // If we have today's picks, take top 3 (prefer high conf)
-  if (todayCandidates.length >= 1) {
-    return { picks: todayCandidates.slice(0, 3), dateKey: todayKey };
-  }
-
-  // Otherwise find the next upcoming date with high-conf games
-  const futureCandidates = candidates.filter(g => g.kick.slice(0, 10) > todayKey);
-  if (futureCandidates.length === 0) return { picks: [], dateKey: todayKey };
-  
-  const nextDateKey = futureCandidates[0].kick.slice(0, 10);
-  const nextDatePicks = futureCandidates.filter(g => g.kick.slice(0, 10) === nextDateKey).slice(0, 3);
-  return { picks: nextDatePicks, dateKey: nextDateKey };
-};
-
 /* ── HELPERS ──────────────────────────────────────────────── */
 const LS = "betai_v5";
 const persist = {
@@ -272,19 +265,23 @@ const persist = {
     try {
       const raw = window.localStorage.getItem(LS);
       return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   },
-  save: (d: any) => {
+  save: d => {
     if (typeof window === "undefined") return;
-    try { window.localStorage.setItem(LS, JSON.stringify(d)); } catch {}
+    try {
+      window.localStorage.setItem(LS, JSON.stringify(d));
+    } catch {}
   }
 };
 
-const oddsFor = (g: any, p: string) => p==="home_win"?g.odds.h : p==="draw"?g.odds.d : g.odds.a;
-const pickName = (p: string) => ({home_win:"Home Win",draw:"Draw",away_win:"Away Win"}[p]||p);
-const pickColor = (p: string) => ({home_win:COLORS.blue, draw:COLORS.gold, away_win:COLORS.purple}[p]||COLORS.green);
+const oddsFor = (g, p) => p==="home_win"?g.odds.h : p==="draw"?g.odds.d : g.odds.a;
+const pickName = p => ({home_win:"Home Win",draw:"Draw",away_win:"Away Win"}[p]||p);
+const pickColor = p => ({home_win:COLORS.blue, draw:COLORS.gold, away_win:COLORS.purple}[p]||COLORS.green);
 
-const confMeta = (c: number) => c>=88
+const confMeta = c => c>=88
   ? {label:"ELITE",c:COLORS.gold,bg:"rgba(255,215,64,0.12)",bc:"rgba(255,215,64,0.3)"}
   : c>=75
     ? {label:"HIGH",c:COLORS.green,bg:COLORS.greenFaint,bc:COLORS.greenBorder}
@@ -292,7 +289,7 @@ const confMeta = (c: number) => c>=88
       ? {label:"MED",c:COLORS.blue,bg:COLORS.blueFaint,bc:"rgba(68,138,255,0.3)"}
       : {label:"LOW",c:COLORS.red,bg:COLORS.redFaint,bc:"rgba(255,82,82,0.25)"};
 
-const didWin = (g: any, p: string) => {
+const didWin = (g, p) => {
   if (!g?.score) return null;
   if (p==="home_win") return g.score.h > g.score.a;
   if (p==="draw")     return g.score.h === g.score.a;
@@ -300,7 +297,7 @@ const didWin = (g: any, p: string) => {
   return null;
 };
 
-const getFallbackStatus = (game: any) => {
+const getFallbackStatus = game => {
   if (game.st === "result" || game.score) return "finished";
   const now  = Date.now();
   const kick = new Date(game.kick).getTime();
@@ -310,31 +307,34 @@ const getFallbackStatus = (game: any) => {
   return "finished";
 };
 
-const getResolvedStatus = (game: any, liveData: any) => liveData ? getScoreStatus(liveData) : getFallbackStatus(game);
+const getResolvedStatus = (game, liveData) => liveData ? getScoreStatus(liveData) : getFallbackStatus(game);
 
-const getResolvedScore = (game: any, liveData: any) => {
+const getResolvedScore = (game, liveData) => {
   const hs = liveData?.homeScore ?? null;
   const as_ = liveData?.awayScore ?? null;
   if (hs !== null && as_ !== null) return { h: hs, a: as_ };
   return game.score ?? null;
 };
 
-const formatLiveCountdown = (liveData: any) => {
+const formatLiveCountdown = liveData => {
   if (!liveData || liveData.elapsed === null || liveData.statusShort === "HT") return null;
   const target = liveData.statusShort === "ET" || liveData.statusShort === "P" ? 120 : 90;
   const remaining = Math.max(target - liveData.elapsed, 0);
   return `${remaining}m left`;
 };
 
-const formatLastUpdated = (ts: any) => {
+const formatLastUpdated = ts => {
   if (!ts) return null;
-  return new Date(ts).toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" });
+  return new Date(ts).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 /* ── DATE HELPERS ─────────────────────────────────────────── */
-const toDateKey = (isoStr: string) => isoStr.slice(0, 10);
+const toDateKey = isoStr => isoStr.slice(0, 10); // "YYYY-MM-DD"
 
-const formatDateLabel = (isoDateKey: string) => {
+const formatDateLabel = isoDateKey => {
   const d = new Date(isoDateKey + "T12:00:00Z");
   const today = new Date();
   const todayKey = today.toISOString().slice(0, 10);
@@ -348,24 +348,12 @@ const formatDateLabel = (isoDateKey: string) => {
 
 const getTodayKey = () => new Date().toISOString().slice(0, 10);
 
-const formatKickTime = (isoStr: string) => {
-  const d = new Date(isoStr);
-  return d.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" });
-};
-
-const formatKickDate = (isoStr: string) => {
-  const d = new Date(isoStr);
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const dateKey = isoStr.slice(0, 10);
-  if (dateKey === todayKey) return `Today · ${formatKickTime(isoStr)}`;
-  return d.toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short" }) + ` · ${formatKickTime(isoStr)}`;
-};
-
-const sortGamesByKick = (games: any[]) =>
+const sortGamesByKick = games =>
   games.slice().sort((a, b) => new Date(a.kick).getTime() - new Date(b.kick).getTime());
 
-const groupByDate = (games: any[], prioritizeToday = false) => {
-  const map: Record<string, any[]> = {};
+/* Groups games by date, returns sorted array of { dateKey, label, games } */
+const groupByDate = (games, prioritizeToday = false) => {
+  const map = {};
   sortGamesByKick(games).forEach(g => {
     const key = toDateKey(g.kick);
     if (!map[key]) map[key] = [];
@@ -384,7 +372,7 @@ const groupByDate = (games: any[], prioritizeToday = false) => {
 };
 
 const CATS = ["All","UCL","EPL","La Liga","Bundesliga"];
-const LEAGUES_LABEL: Record<string,string> = { UCL:"Champions League", EPL:"Premier League", "La Liga":"La Liga", "Bundesliga":"Bundesliga" };
+const LEAGUES_LABEL = { UCL:"Champions League", EPL:"Premier League", "La Liga":"La Liga", "Bundesliga":"Bundesliga" };
 
 /* ── APP ──────────────────────────────────────────────────── */
 export default function App() {
@@ -392,31 +380,26 @@ export default function App() {
   const todayMatchesRef = useRef<HTMLDivElement | null>(null);
   const hasAutoScrolledToTodayRef = useRef(false);
   const s0 = persist.load();
-  const [balance, setBalance]     = useState<number>(s0?.balance ?? 500);
-  const [slip, setSlip]           = useState<any[]>(s0?.slip ?? []);
-  const [history, setHistory]     = useState<any[]>(s0?.history ?? []);
+  const [balance, setBalance]     = useState(s0?.balance ?? 500);
+  const [slip, setSlip]           = useState(s0?.slip ?? []);
+  const [history, setHistory]     = useState(s0?.history ?? []);
   const [page, setPage]           = useState("home");
   const [cat, setCat]             = useState("All");
   const [slipOpen, setSlipOpen]   = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [placing, setPlacing]     = useState(false);
-  const [expanded, setExpanded]   = useState<string|null>(null);
-  const [toast, setToast]         = useState<any>(null);
+  const [expanded, setExpanded]   = useState(null);
+  const [toast, setToast]         = useState(null);
   const [depOpen, setDepOpen]     = useState(false);
   const [depVal, setDepVal]       = useState("50");
-  const [histExp, setHistExp]     = useState<number|null>(null);
+  const [histExp, setHistExp]     = useState(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [tick, setTick]           = useState(0);
-  // Track which bets have been settled (won/lost) to avoid double-crediting
-  const settledIdsRef = useRef<Set<number>>(new Set(
-    (s0?.history ?? [])
-      .filter((e: any) => e.status === "won" || e.status === "lost")
-      .map((e: any) => e.id)
-  ));
 
   // ── REAL-TIME LIVE SCORES ─────────────────────────────────
   const { scoreMap, connected: liveConnected, lastUpdated, liveCount } = useLiveScores();
 
+  // Look up live data for a game by home/away team names
   const getLive = useCallback((home: string, away: string): LiveScore | undefined => {
     const key = `${home.toLowerCase()}|${away.toLowerCase()}`;
     return scoreMap.get(key);
@@ -426,19 +409,20 @@ export default function App() {
     const currentTick = tick;
     return GAMES.map(g => {
       void currentTick;
-      const liveData = getLive(g.home, g.away);
-      const resolvedStatus = getResolvedStatus(g, liveData);
-      const resolvedScore = getResolvedScore(g, liveData);
-      return {
-        ...g,
-        st: resolvedStatus === "finished" && resolvedScore ? "result" : g.st,
-        score: resolvedScore,
-      };
+    const liveData = getLive(g.home, g.away);
+    const resolvedStatus = getResolvedStatus(g, liveData);
+    const resolvedScore = getResolvedScore(g, liveData);
+    return {
+      ...g,
+      st: resolvedStatus === "finished" && resolvedScore ? "result" : g.st,
+      score: resolvedScore,
+    };
     });
   }, [getLive, tick]);
 
   const resolvedGameMap = useMemo(() => new Map(resolvedGames.map(g => [g.id, g])), [resolvedGames]);
 
+  // Determine if a game can be added to slip (upcoming only)
   const isGameBettable = useCallback((g: any): boolean => {
     const live = getLive(g.home, g.away);
     return getResolvedStatus(g, live) === "upcoming";
@@ -446,67 +430,62 @@ export default function App() {
 
   useEffect(() => { persist.save({balance, slip, history}); }, [balance, slip, history]);
 
-  // ── AUTO-SETTLE: detect finished games, update status, credit/record balance ──
+  // ── AUTO-SETTLE: check history against result games, credit balance ──────
   useEffect(() => {
-    let anyChanged = false;
-
-    const updated = history.map(entry => {
-      // Already fully settled — skip
-      if (entry.status === "won" || entry.status === "lost") return entry;
-
-      // Try to settle each bet leg
-      const bets = entry.bets.map((b: any) => {
+    let changed = false;
+    let balanceCredit = 0;
+    let winsSettled = 0;
+    let lossesSettled = 0;
+    const updated = history.map(e => {
+      if (e.status === "won" || e.status === "lost") return e; // already settled
+      const bets = e.bets.map(b => {
         if (b.result === "won" || b.result === "lost") return b;
         const g = resolvedGameMap.get(b.id);
         if (!g?.score || g.st !== "result") return b;
         const won = didWin(g, b.pick);
-        return { ...b, result: won ? "won" : "lost", score: g.score };
+        return {...b, result: won ? "won" : "lost", score: g.score};
       });
-
-      const allSettled = bets.every((b: any) => b.result === "won" || b.result === "lost");
-      if (!allSettled) {
-        const changed = bets.some((b: any, i: number) => b.result !== entry.bets[i].result);
-        if (changed) anyChanged = true;
-        return { ...entry, bets };
-      }
-
-      const allWon = bets.every((b: any) => b.result === "won");
+      const allSettled = bets.every(b => b.result === "won" || b.result === "lost");
+      if (!allSettled) return {...e, bets};
+      const allWon = bets.every(b => b.result === "won");
       const newStatus = allWon ? "won" : "lost";
-
-      // Only credit/record once per entry
-      if (!settledIdsRef.current.has(entry.id)) {
-        settledIdsRef.current.add(entry.id);
-        anyChanged = true;
-
+      if (newStatus !== e.status) {
+        changed = true;
         if (newStatus === "won") {
-          // Credit winnings back (stake was already deducted at placement)
-          setBalance(prev => +(prev + entry.potReturn).toFixed(2));
-          setTimeout(() => toast$(`🏆 BET WON! +€${entry.potReturn.toFixed(2)} credited to your balance`, "ok"), 100);
-        } else {
-          // Stake already deducted at placement — just notify
-          setTimeout(() => toast$(`Bet settled — better luck next time!`, "err"), 100);
+          // Credit winnings to balance
+          balanceCredit += e.potReturn;
+          winsSettled++;
+        }
+        if (newStatus === "lost") {
+          lossesSettled++;
         }
       }
-
-      return { ...entry, bets, status: newStatus, settlementAmount: newStatus === "won" ? entry.potReturn : 0 };
+      return {...e, bets, status: newStatus, settlementAmount: newStatus === "won" ? e.potReturn : 0};
     });
+    if (changed) {
+      if (balanceCredit > 0) {
+        setBalance(prev => +(prev + balanceCredit).toFixed(2));
+      }
+      setHistory(updated);
+      if (winsSettled > 0) {
+        toast$(`Settled ${winsSettled} winning bet${winsSettled !== 1 ? "s" : ""}. +€${balanceCredit.toFixed(2)} added to balance`, "ok");
+      } else if (lossesSettled > 0) {
+        toast$(`Settled ${lossesSettled} losing bet${lossesSettled !== 1 ? "s" : ""}.`, "err");
+      }
+    }
+  }, [history, scoreMap, tick, resolvedGameMap]); // re-run whenever live or timed state changes
 
-    if (anyChanged) setHistory(updated);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedGameMap, tick]);
-
-  // ── LIVE CLOCK: re-render every 30s ──────────────────────
+  // ── LIVE CLOCK: re-render every 30s while any game could be live ──────────
   useEffect(() => {
     const t = setInterval(() => setTick(n => n + 1), 30_000);
     return () => clearInterval(t);
   }, []);
 
-  const toast$ = (msg: string, type = "ok") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3200);
+  const toast$ = (msg, type="ok") => {
+    setToast({msg, type});
+    setTimeout(() => setToast(null), 2800);
   };
 
-  // Remove closed matches from slip
   useEffect(() => {
     setSlip(prev => {
       const next = prev.filter(b => {
@@ -518,53 +497,57 @@ export default function App() {
       }
       return next.length === prev.length ? prev : next;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scoreMap, tick, resolvedGameMap]);
+  }, [scoreMap, tick, resolvedGameMap, isGameBettable]);
 
   /* ── LOGOUT ──────────────────────────────────────────────── */
   async function handleLogout() {
     setLoggingOut(true);
-    try { await fetch("/api/auth/logout", { method: "POST" }); } catch (_) {}
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (_) {}
     try { localStorage.removeItem(LS); } catch (_) {}
     router.push("/");
   }
 
-  // Slip math
+  // slip math
   const totalStake = slip.reduce((a, b) => a + (parseFloat(b.stake) || 0), 0);
   const accumOdds  = slip.reduce((a, b) => a * b.odds, 1);
   const potReturn  = totalStake * accumOdds;
-  const inSlip     = (id: string) => slip.some(b => b.id === id);
+  const inSlip     = id => slip.some(b => b.id === id);
 
-  function addToSlip(game: any, pick: string) {
+  function addToSlip(game, pick) {
     if (!isGameBettable(game)) {
       toast$("Betting closed — game is live or finished", "err");
       return;
     }
     if (inSlip(game.id)) { setSlip(p => p.filter(b => b.id !== game.id)); return; }
     const odds = oddsFor(game, pick);
-    setSlip(p => [...p, {id:game.id, home:game.home, away:game.away, league:game.league, flag:game.flag, kick:game.kick, pick, odds, stake:"10"}]);
+    setSlip(p => [...p, {id:game.id, home:game.home, away:game.away, league:game.league, flag:game.flag, pick, odds, stake:"10"}]);
     setSlipOpen(true);
     toast$(`${game.home} vs ${game.away} added`);
   }
 
-  function addMega(m: any) {
+  function addMega(m) {
     if (!isGameBettable(m)) {
       toast$("Betting closed — game is live or finished", "err");
       return;
     }
     if (inSlip(m.id)) { setSlip(p => p.filter(b => b.id !== m.id)); return; }
-    setSlip(p => [...p, {id:m.id, home:m.home, away:m.away, league:m.league, flag:m.flag, kick:m.kick, pick:m.pick, odds:oddsFor(m, m.pick), stake:"10"}]);
+    setSlip(p => [...p, {id:m.id, home:m.home, away:m.away, league:m.league, flag:m.flag, pick:m.pick, odds:m.odds, stake:"10"}]);
     setSlipOpen(true);
     toast$("🔥 Mega Pick added!", "mega");
   }
 
-  const updateStake = (id: string, v: string) => setSlip(p => p.map(b => b.id===id ? {...b, stake:v} : b));
-  const removeSlip  = (id: string) => setSlip(p => p.filter(b => b.id !== id));
+  const updateStake = (id, v) => setSlip(p => p.map(b => b.id===id ? {...b, stake:v} : b));
+  const removeSlip  = id => setSlip(p => p.filter(b => b.id !== id));
 
   async function placeBets() {
     if (totalStake > balance || totalStake <= 0) { toast$("Insufficient balance", "err"); return; }
     const invalidIds = slip
-      .filter(b => { const match = resolvedGameMap.get(b.id); return !match || !isGameBettable(match); })
+      .filter(b => {
+        const match = resolvedGameMap.get(b.id);
+        return !match || !isGameBettable(match);
+      })
       .map(b => b.id);
     if (invalidIds.length > 0) {
       setSlip(p => p.filter(b => !invalidIds.includes(b.id)));
@@ -575,11 +558,10 @@ export default function App() {
     await new Promise(r => setTimeout(r, 1300));
     const entry = {
       id: Date.now(), placedAt: new Date().toISOString(),
-      bets: slip.map(b => ({ ...b, result: "pending" as const })),
-      totalStake, accumOdds: +accumOdds.toFixed(2), potReturn: +potReturn.toFixed(2), status: "pending"
+      bets: [...slip], totalStake, accumOdds: +accumOdds.toFixed(2), potReturn: +potReturn.toFixed(2), status: "pending"
     };
     setHistory(p => [entry, ...p]);
-    setBalance(p => +(p - totalStake).toFixed(2)); // deduct stake immediately
+    setBalance(p => +(p - totalStake).toFixed(2));
     setSlip([]); setSlipOpen(false); setPlacing(false);
     toast$("✅ Bets placed! Good luck!", "ok");
   }
@@ -594,69 +576,63 @@ export default function App() {
     }
   }
 
-  // Compute display-state of history (for rendering only, no side effects)
-  const settledHistory = useMemo(() => history.map(entry => {
-    const bets = entry.bets.map((b: any) => {
-      if (b.result === "won" || b.result === "lost") return b;
+  // settled history
+  const settled = history.map(e => {
+    const bets = e.bets.map(b => {
       const g = resolvedGameMap.get(b.id);
-      if (!g?.score || g.st !== "result") return { ...b, result: "pending" };
-      return { ...b, result: didWin(g, b.pick) ? "won" : "lost", score: g.score };
+      if (!g?.score || g.st !== "result") return {...b, result:"pending"};
+      return {...b, result: didWin(g, b.pick) ? "won" : "lost", score: g.score};
     });
-    // Also merge bets that may have live score updates
-    const mergedBets = bets.map((b: any) => {
-      if (b.score) return b;
-      const g = resolvedGameMap.get(b.id);
-      if (g?.score) return { ...b, score: g.score };
-      return b;
-    });
-    const done  = mergedBets.every((b: any) => b.result !== "pending");
-    const allW  = mergedBets.every((b: any) => b.result === "won");
+    const done = bets.every(b => b.result !== "pending");
+    const allW = bets.every(b => b.result === "won");
     return {
-      ...entry,
-      bets: mergedBets,
-      status: entry.status !== "pending" ? entry.status : (done ? (allW ? "won" : "lost") : "pending"),
-      settlementAmount: done && allW ? +(entry.potReturn ?? 0).toFixed(2) : 0,
+      ...e,
+      bets,
+      status: done ? (allW ? "won" : "lost") : "pending",
+      settlementAmount: done && allW ? e.potReturn : 0,
     };
-  }), [history, resolvedGameMap]);
+  });
 
-  const wonCount     = settledHistory.filter(e => e.status === "won").length;
-  const settledCount = settledHistory.filter(e => e.status !== "pending").length;
+  const wonCount     = settled.filter(e => e.status === "won").length;
+  const settledCount = settled.filter(e => e.status !== "pending").length;
   const winRate      = settledCount ? Math.round(wonCount / settledCount * 100) : null;
   const totalWagered = history.reduce((a, e) => a + e.totalStake, 0);
-  const totalReturns = settledHistory.filter(e => e.status === "won").reduce((a, e) => a + e.potReturn, 0);
+  const totalReturns = settled.filter(e => e.status === "won").reduce((a, e) => a + e.potReturn, 0);
 
   const upGames  = resolvedGames.filter(g => g.st !== "result" && (cat === "All" || g.cat === cat));
   const resGames = resolvedGames.filter(g => g.st === "result" && (cat === "All" || g.cat === cat));
   const upcoming = resolvedGames.filter(g => g.st !== "result");
-  const avgConf  = upcoming.length ? Math.round(upcoming.reduce((a, g) => a + g.conf, 0) / upcoming.length) : 0;
 
-  // Grouped data
+  const avgConf = upcoming.length ? Math.round(upcoming.reduce((a, g) => a + g.conf, 0) / upcoming.length) : 0;
+
+  // Date-grouped data
   const upGrouped  = groupByDate(upGames);
   const resGrouped = groupByDate(resGames);
 
-  // Dynamic mega picks
-  const { picks: megaPicks, dateKey: megaDateKey } = getMegaPicks();
-  const megaDateLabel = formatDateLabel(megaDateKey);
-  const megaCount = megaPicks.length;
-
-  // Resolve mega picks against live game state
-  const resolvedMegaPicks = megaPicks.map(m => {
-    const rg = resolvedGames.find(g => g.id === m.id);
-    return rg || m;
-  });
-
+  // Today's mega picks only
   const todayKey = getTodayKey();
-  const hasTodayMatchGroup = upGrouped.some(g => g.dateKey === todayKey);
+  const hasTodayMatchGroup = upGrouped.some(group => group.dateKey === todayKey);
   useEffect(() => {
-    if (page !== "matches") { hasAutoScrolledToTodayRef.current = false; return; }
+    if (page !== "matches") {
+      hasAutoScrolledToTodayRef.current = false;
+      return;
+    }
     if (!hasTodayMatchGroup || hasAutoScrolledToTodayRef.current || !todayMatchesRef.current) return;
-    todayMatchesRef.current.scrollIntoView({ behavior:"smooth", block:"start" });
+    todayMatchesRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     hasAutoScrolledToTodayRef.current = true;
   }, [page, hasTodayMatchGroup]);
 
+  const todayMega = MEGA.filter(m => toDateKey(m.kick) === todayKey);
+  // If no mega picks today, show the next upcoming date's mega picks
+  const nextMegaDateKey = todayMega.length === 0
+    ? (MEGA.map(m => toDateKey(m.kick)).filter(k => k >= todayKey).sort()[0] || null)
+    : null;
+  const displayedMega = todayMega.length > 0 ? todayMega : (nextMegaDateKey ? MEGA.filter(m => toDateKey(m.kick) === nextMegaDateKey) : []);
+  const megaDateLabel = todayMega.length > 0 ? "TODAY" : (nextMegaDateKey ? formatDateLabel(nextMegaDateKey) : "");
+  const megaCount = displayedMega.length;
   const liveUpdatedLabel = formatLastUpdated(lastUpdated);
 
-  const logoutBtnStyle: React.CSSProperties = {
+  const logoutBtnStyle = {
     display:"flex", alignItems:"center", gap:6,
     fontSize:11, fontWeight:700, letterSpacing:"0.06em",
     color:COLORS.text2, background:"transparent",
@@ -819,8 +795,12 @@ export default function App() {
               </div>
             ))}
           </div>
-          <button className="btn logout-btn" onClick={handleLogout} disabled={loggingOut}
-            style={{...logoutBtnStyle, width:"100%", justifyContent:"center"}}>
+          <button
+            className="btn logout-btn"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={{...logoutBtnStyle, width:"100%", justifyContent:"center"}}
+          >
             {loggingOut ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</> : <>↪ SIGN OUT</>}
           </button>
         </div>
@@ -868,24 +848,43 @@ export default function App() {
           </div>
         </div>
         <div style={{display:"flex", alignItems:"center", gap:10}}>
+          {/* Live indicator */}
           {liveConnected && liveCount > 0 && (
-            <div className="pulse" style={{display:"flex", alignItems:"center", gap:6, fontSize:10, color:COLORS.green, fontWeight:800, letterSpacing:"0.08em", background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:999, padding:"4px 10px"}}>
+            <div className="pulse" style={{
+              display:"flex", alignItems:"center", gap:6,
+              fontSize:10, color:COLORS.green, fontWeight:800, letterSpacing:"0.08em",
+              background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`,
+              borderRadius:999, padding:"4px 10px",
+            }}>
               <span style={{width:6, height:6, borderRadius:"50%", background:COLORS.green, display:"block"}}/>
               {liveCount} LIVE
             </div>
           )}
           {liveConnected && liveCount === 0 && (
-            <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.08em", fontWeight:600, display:"flex", alignItems:"center", gap:5}}>
-              <span style={{width:5, height:5, borderRadius:"50%", background:COLORS.green, display:"block", opacity:0.6}}/>LIVE
+            <div style={{
+              fontSize:9, color:COLORS.text2, letterSpacing:"0.08em", fontWeight:600,
+              display:"flex", alignItems:"center", gap:5,
+            }}>
+              <span style={{width:5, height:5, borderRadius:"50%", background:COLORS.green, display:"block", opacity:0.6}}/>
+              LIVE
             </div>
           )}
           {!liveConnected && (
             <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.06em", display:"flex", alignItems:"center", gap:5}}>
-              <span style={{width:5, height:5, borderRadius:"50%", background:COLORS.text2, display:"block"}}/>CONNECTING
+              <span style={{width:5, height:5, borderRadius:"50%", background:COLORS.text2, display:"block"}}/>
+              CONNECTING
             </div>
           )}
           {liveConnected && liveUpdatedLabel && (
-            <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.06em", fontWeight:600}}>Updated {liveUpdatedLabel}</div>
+            <div style={{
+              fontSize:9,
+              color:COLORS.text2,
+              letterSpacing:"0.06em",
+              fontWeight:600,
+              padding:"4px 0",
+            }}>
+              Updated {liveUpdatedLabel}
+            </div>
           )}
           {toast && toast.type==="ok" && <div style={{fontSize:11, color:COLORS.green, background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:20, padding:"5px 14px", fontWeight:600, animation:"fadeIn .2s ease"}}>{toast.msg}</div>}
           <button className="btn" onClick={() => setSlipOpen(p => !p)}
@@ -896,7 +895,12 @@ export default function App() {
             🎫 Bet Slip
             {slip.length>0 && <span style={{background:COLORS.green, color:COLORS.bg0, borderRadius:999, padding:"0 8px", fontSize:10, fontWeight:800, lineHeight:"18px"}}>{slip.length}</span>}
           </button>
-          <button className="btn logout-btn" onClick={handleLogout} disabled={loggingOut} style={logoutBtnStyle}>
+          <button
+            className="btn logout-btn"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={logoutBtnStyle}
+          >
             {loggingOut ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</> : <>↪ SIGN OUT</>}
           </button>
         </div>
@@ -906,7 +910,9 @@ export default function App() {
       {sidebarOpen && (
         <>
           <div onClick={() => setSidebarOpen(false)} style={{position:"fixed", inset:0, zIndex:89, background:"rgba(0,0,0,0.7)", backdropFilter:"blur(4px)"}}/>
-          <div style={{position:"fixed", top:0, left:0, bottom:0, width:260, zIndex:90, background:COLORS.bg1, borderRight:`1px solid ${COLORS.border}`, display:"flex", flexDirection:"column", animation:"fadeUp .25s ease", overflowY:"auto"}}>
+          <div style={{position:"fixed", top:0, left:0, bottom:0, width:260, zIndex:90, background:COLORS.bg1,
+            borderRight:`1px solid ${COLORS.border}`, display:"flex", flexDirection:"column",
+            animation:"fadeUp .25s ease", overflowY:"auto"}}>
             <div style={{padding:"16px 18px", borderBottom:`1px solid ${COLORS.border}`, display:"flex", alignItems:"center", justifyContent:"space-between"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:22}}>BET<span style={{color:COLORS.green}}>AI</span></div>
               <button onClick={() => setSidebarOpen(false)} style={{fontSize:22, color:COLORS.text2, lineHeight:1}}>×</button>
@@ -940,8 +946,12 @@ export default function App() {
               ))}
             </nav>
             <div style={{padding:"12px 12px 16px", borderTop:`1px solid ${COLORS.border}`}}>
-              <button className="btn logout-btn" onClick={() => { setSidebarOpen(false); handleLogout(); }} disabled={loggingOut}
-                style={{...logoutBtnStyle, width:"100%", justifyContent:"center"}}>
+              <button
+                className="btn logout-btn"
+                onClick={() => { setSidebarOpen(false); handleLogout(); }}
+                disabled={loggingOut}
+                style={{...logoutBtnStyle, width:"100%", justifyContent:"center"}}
+              >
                 {loggingOut ? <><span className="spin" style={{fontSize:10}}>◌</span> Signing out...</> : <>↪ SIGN OUT</>}
               </button>
             </div>
@@ -972,7 +982,7 @@ export default function App() {
           border:`1px solid ${toast.type==="err"?COLORS.red:toast.type==="mega"?COLORS.orange:COLORS.greenBorder}`,
           color:toast.type==="err"?COLORS.red:toast.type==="mega"?COLORS.orange:COLORS.green,
           borderRadius:10, padding:"9px 14px", fontSize:12, fontWeight:700,
-          animation:"toastIn .25s ease", maxWidth:300
+          animation:"toastIn .25s ease", maxWidth:260
         }}>
           {toast.msg}
         </div>
@@ -1008,9 +1018,9 @@ export default function App() {
             <>
               <div className="stats-grid" style={{display:"grid", gap:10, marginBottom:18}}>
                 {[
-                  {icon:"🎯", label:"AI Win Rate",     val:winRate!==null?`${winRate}%`:"74%",            sub:"Last 30 days",                                   col:COLORS.green},
+                  {icon:"🎯", label:"AI Win Rate",     val:winRate!==null?`${winRate}%`:"74%",            sub:"Last 30 days",                                  col:COLORS.green},
                   {icon:"⚽", label:"Today's Tips",    val:upcoming.length,                               sub:`${upcoming.filter(g=>g.conf>=80).length} high-confidence`, col:COLORS.blue},
-                  {icon:"📈", label:"Avg Confidence",  val:`${avgConf}%`,                                 sub:"All upcoming games",                              col:COLORS.gold},
+                  {icon:"📈", label:"Avg Confidence",  val:`${avgConf}%`,                                 sub:"All upcoming games",                             col:COLORS.gold},
                   {icon:"💰", label:"Potential Return", val:slip.length>0?`€${potReturn.toFixed(2)}`:"—", sub:slip.length>0?`${slip.length} selections`:"Add selections", col:slip.length>0?COLORS.green:COLORS.text2},
                 ].map((s, i) => (
                   <div key={i} className="card-hover" onClick={i===3&&slip.length>0?()=>setSlipOpen(true):undefined}
@@ -1025,127 +1035,70 @@ export default function App() {
                 ))}
               </div>
 
-              {/* ── DYNAMIC MEGA PICKS ── */}
-              {resolvedMegaPicks.length > 0 && (
+              {/* Mega Picks — filtered to today's date (or next upcoming date) */}
+              {displayedMega.length > 0 && (
                 <div style={{marginBottom:18}}>
                   <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
                     <div style={{display:"flex", alignItems:"center", gap:8}}>
                       <div style={{width:4, height:22, borderRadius:2, background:COLORS.orange}}/>
                       <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18, letterSpacing:"0.03em"}}>🔥 MEGA SURE PICKS</span>
-                      <span style={{fontSize:9, color:COLORS.orange, background:COLORS.orangeFaint, border:`1px solid ${COLORS.orangeBorder}`, borderRadius:5, padding:"2px 8px", fontWeight:800}}>
-                        {megaDateLabel} · {megaCount} PICK{megaCount!==1?"S":""}
-                      </span>
+                      <span style={{fontSize:9, color:COLORS.orange, background:COLORS.orangeFaint, border:`1px solid ${COLORS.orangeBorder}`, borderRadius:5, padding:"2px 8px", fontWeight:800}}>{megaDateLabel} · {megaCount} PICK{megaCount!==1?"S":""}</span>
                     </div>
                   </div>
 
                   <div className="mega-grid" style={{display:"grid", gap:10}}>
-                    {resolvedMegaPicks.map((m, i) => {
-                      const inS   = inSlip(m.id);
-                      const bettable = isGameBettable(m);
-                      const cm    = confMeta(m.conf);
-                      const liveData = getLive(m.home, m.away);
-                      const status = getResolvedStatus(m, liveData);
-                      const isLive = status === "live" || status === "halftime";
-                      const isFinished = status === "finished";
-                      const score = getResolvedScore(m, liveData);
+                    {displayedMega.map((m, i) => {
+                      const inS = inSlip(m.id);
                       return (
                         <div key={m.id} className="card-hover glowpulse fadeUp"
                           style={{background:`linear-gradient(135deg,rgba(255,109,0,0.08) 0%,rgba(30,20,5,0.95) 60%)`,
-                            border:`1px solid ${isLive ? COLORS.greenBorder : COLORS.orangeBorder}`, borderRadius:14, overflow:"hidden",
+                            border:`1px solid ${COLORS.orangeBorder}`, borderRadius:14, overflow:"hidden",
                             animationDelay:`${i*0.07}s`, animationFillMode:"both"}}>
                           <div style={{padding:"14px 16px"}}>
-                            {/* Header */}
                             <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
                               <div style={{display:"flex", alignItems:"center", gap:6}}>
                                 <span>{m.flag}</span>
                                 <span style={{fontSize:10, color:COLORS.text1, fontWeight:600}}>{m.league}</span>
-                                <span style={{fontSize:9, background:COLORS.orangeFaint, color:COLORS.orange, borderRadius:4, padding:"1px 6px", fontWeight:800}}>
-                                  {isLive ? "🔴 LIVE" : isFinished ? "FT" : "MEGA SURE"}
-                                </span>
+                                <span style={{fontSize:9, background:COLORS.orangeFaint, color:COLORS.orange, borderRadius:4, padding:"1px 6px", fontWeight:800}}>MEGA SURE</span>
                               </div>
                               <div style={{display:"flex", alignItems:"center", gap:5}}>
-                                <span style={{fontSize:11, fontFamily:"'Barlow Condensed',sans-serif", color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"2px 8px"}}>{oddsFor(m, m.pick).toFixed(2)}</span>
-                                <span style={{fontSize:9, color:cm.c, fontWeight:800, background:cm.bg, border:`1px solid ${cm.bc}`, borderRadius:4, padding:"1px 6px"}}>{m.conf}%</span>
+                                <span style={{fontSize:11, fontFamily:"'Barlow Condensed',sans-serif", color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"2px 8px"}}>{m.odds.toFixed(2)}</span>
+                                <span style={{fontSize:9, color:COLORS.gold, fontWeight:800, background:"rgba(255,215,64,0.08)", border:`1px solid ${COLORS.goldBorder}`, borderRadius:4, padding:"1px 6px"}}>{m.conf}%</span>
                               </div>
                             </div>
-
-                            {/* Teams + Score */}
-                            {(isLive || isFinished) && score ? (
-                              <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:8, alignItems:"center", marginBottom:8}}>
-                                <div style={{textAlign:"right", fontWeight:800, fontSize:14, color:score.h>score.a?COLORS.text0:COLORS.text2}}>{m.home}</div>
-                                <div style={{textAlign:"center", background:isLive?COLORS.greenFaint:COLORS.bg2, border:`1px solid ${isLive?COLORS.greenBorder:COLORS.border}`, borderRadius:9, padding:"6px 12px"}}>
-                                  <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:22, color:isLive?COLORS.green:COLORS.text0}}>{score.h}–{score.a}</div>
-                                  <div style={{fontSize:8, color:isLive?COLORS.green:COLORS.text2, fontWeight:700}}>{isLive?"LIVE":"FT"}</div>
+                            <div style={{fontWeight:800, fontSize:15, marginBottom:3, lineHeight:1.3}}>{m.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:12}}>vs</span> {m.away}</div>
+                            <div style={{fontSize:10, color:COLORS.text2, marginBottom:10}}>{m.display}</div>
+                            <p style={{fontSize:12, color:COLORS.text1, lineHeight:1.75, marginBottom:10}}>{m.analysis}</p>
+                            <div style={{display:"flex", flexDirection:"column", gap:4, marginBottom:12}}>
+                              {m.tips.map((t, j) => (
+                                <div key={j} style={{display:"flex", gap:6, fontSize:11, color:COLORS.text2}}>
+                                  <span style={{color:COLORS.orange, flexShrink:0}}>›</span><span>{t}</span>
                                 </div>
-                                <div style={{fontWeight:800, fontSize:14, color:score.a>score.h?COLORS.text0:COLORS.text2}}>{m.away}</div>
-                              </div>
-                            ) : (
-                              <>
-                                <div style={{fontWeight:800, fontSize:15, marginBottom:3, lineHeight:1.3}}>{m.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:12}}>vs</span> {m.away}</div>
-                                <div style={{fontSize:10, color:COLORS.text2, marginBottom:10}}>{formatKickDate(m.kick)}</div>
-                              </>
-                            )}
-
-                            {/* Analysis + tips only when upcoming */}
-                            {bettable && m.analysis && (
-                              <>
-                                <p style={{fontSize:12, color:COLORS.text1, lineHeight:1.75, marginBottom:10}}>{m.analysis}</p>
-                                <div style={{display:"flex", flexDirection:"column", gap:4, marginBottom:12}}>
-                                  {(m.tips||[]).map((t: string, j: number) => (
-                                    <div key={j} style={{display:"flex", gap:6, fontSize:11, color:COLORS.text2}}>
-                                      <span style={{color:COLORS.orange, flexShrink:0}}>›</span><span>{t}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </>
-                            )}
-
-                            {/* Pick action row */}
+                              ))}
+                            </div>
                             <div style={{display:"flex", alignItems:"center", gap:8}}>
                               <div style={{flex:1, background:`rgba(255,109,0,0.12)`, border:`1px solid ${COLORS.orangeBorder}`, borderRadius:8, padding:"7px 12px", textAlign:"center"}}>
-                                <div style={{fontSize:11, color:COLORS.orange, fontWeight:800}}>{pickName(m.pick)}</div>
+                                <div style={{fontSize:11, color:COLORS.orange, fontWeight:800}}>{m.pickLabel}</div>
                               </div>
-                              {bettable ? (
-                                <button className="btn" onClick={() => addMega(m)}
-                                  style={{width:40, height:36, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
-                                    background:inS?COLORS.greenFaint:COLORS.bg2, border:`1px solid ${inS?COLORS.greenBorder:COLORS.border}`,
-                                    color:inS?COLORS.green:COLORS.text1}}>
-                                  {inS ? "✓" : "+"}
-                                </button>
-                              ) : (
-                                <div style={{width:40, height:36, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center",
-                                  background:COLORS.bg2, border:`1px solid ${COLORS.border}`, fontSize:10, color:COLORS.text2, fontWeight:700}}>
-                                  {isLive ? "🔴" : "✓"}
-                                </div>
-                              )}
+                              <button className="btn" onClick={() => addMega(m)}
+                                style={{width:40, height:36, borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18,
+                                  background:inS?COLORS.greenFaint:COLORS.bg2, border:`1px solid ${inS?COLORS.greenBorder:COLORS.border}`,
+                                  color:inS?COLORS.green:COLORS.text1}}>
+                                {inS ? "✓" : "+"}
+                              </button>
                             </div>
-
-                            {/* Settlement result for finished */}
-                            {isFinished && score && (
-                              <div style={{marginTop:10, padding:"8px 12px", borderRadius:8,
-                                background: didWin(m, m.pick) ? COLORS.greenFaint : COLORS.redFaint,
-                                border:`1px solid ${didWin(m, m.pick) ? COLORS.greenBorder : "rgba(255,82,82,0.25)"}`,
-                                display:"flex", alignItems:"center", justifyContent:"space-between"}}>
-                                <span style={{fontSize:11, fontWeight:700, color: didWin(m, m.pick) ? COLORS.green : COLORS.red}}>
-                                  {didWin(m, m.pick) ? "✓ AI PICK CORRECT" : "✗ AI PICK WRONG"}
-                                </span>
-                                <span style={{fontSize:10, color:COLORS.text2}}>FT {score.h}–{score.a}</span>
-                              </div>
-                            )}
                           </div>
                         </div>
                       );
                     })}
                   </div>
 
-                  {resolvedMegaPicks.some(m => isGameBettable(m)) && (
-                    <button className="btn" onClick={() => resolvedMegaPicks.filter(m => isGameBettable(m)).forEach(m => { if (!inSlip(m.id)) addMega(m); })}
-                      style={{width:"100%", marginTop:10, padding:"13px", borderRadius:12,
-                        background:`linear-gradient(90deg,${COLORS.orange},#ff8f00)`,
-                        color:"#fff", fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:15, letterSpacing:"0.06em"}}>
-                      🔥 ADD ALL MEGA PICKS TO SLIP
-                    </button>
-                  )}
+                  <button className="btn" onClick={() => { displayedMega.forEach(m => { if (!inSlip(m.id)) addMega(m); }); }}
+                    style={{width:"100%", marginTop:10, padding:"13px", borderRadius:12,
+                      background:`linear-gradient(90deg,${COLORS.orange},#ff8f00)`,
+                      color:"#fff", fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:15, letterSpacing:"0.06em"}}>
+                    🔥 ADD ALL {megaCount} MEGA PICK{megaCount!==1?"S":""} TO SLIP
+                  </button>
                 </div>
               )}
 
@@ -1190,6 +1143,7 @@ export default function App() {
                         borderRadius:12, padding:"12px 14px",
                         animationDelay:`${i*0.05}s`, animationFillMode:"both"
                       }}>
+                        {/* Top row: league + date + result badge */}
                         <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8}}>
                           <div style={{display:"flex", alignItems:"center", gap:5}}>
                             <span style={{fontSize:12}}>{g.flag}</span>
@@ -1198,21 +1152,26 @@ export default function App() {
                           </div>
                           <div style={{display:"flex", alignItems:"center", gap:6}}>
                             <span style={{fontSize:10, color:COLORS.text2, fontFamily:"monospace"}}>{g.display}</span>
-                            <span style={{fontSize:10, fontWeight:800, letterSpacing:"0.04em",
+                            <span style={{
+                              fontSize:10, fontWeight:800, letterSpacing:"0.04em",
                               color: correct ? COLORS.green : COLORS.red,
                               background: correct ? COLORS.greenFaint : COLORS.redFaint,
                               border:`1px solid ${correct ? COLORS.greenBorder : "rgba(255,82,82,0.25)"}`,
-                              borderRadius:5, padding:"2px 8px"}}>{correct ? "✓ WIN" : "✗ LOSS"}</span>
+                              borderRadius:5, padding:"2px 8px"
+                            }}>{correct ? "✓ WIN" : "✗ LOSS"}</span>
                           </div>
                         </div>
+                        {/* Score row */}
                         <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:8, alignItems:"center"}}>
                           <div style={{textAlign:"right"}}>
                             <div style={{fontWeight:hW?800:500, fontSize:14, color:hW?COLORS.text0:COLORS.text2, lineHeight:1.2}}>{g.home}</div>
                           </div>
-                          <div style={{textAlign:"center", minWidth:60,
+                          <div style={{
+                            textAlign:"center", minWidth:60,
                             background: dr ? COLORS.goldFaint : correct ? COLORS.greenFaint : COLORS.redFaint,
                             border:`1px solid ${dr ? COLORS.goldBorder : correct ? COLORS.greenBorder : "rgba(255,82,82,0.25)"}`,
-                            borderRadius:9, padding:"6px 12px"}}>
+                            borderRadius:9, padding:"6px 12px"
+                          }}>
                             <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:22, color:dr?COLORS.gold:COLORS.text0, letterSpacing:"0.02em", lineHeight:1}}>{g.score.h}–{g.score.a}</div>
                             <div style={{fontSize:8, color:COLORS.text2, fontWeight:700, letterSpacing:"0.1em", marginTop:2}}>FT</div>
                           </div>
@@ -1220,6 +1179,7 @@ export default function App() {
                             <div style={{fontWeight:aW?800:500, fontSize:14, color:aW?COLORS.text0:COLORS.text2, lineHeight:1.2}}>{g.away}</div>
                           </div>
                         </div>
+                        {/* AI pick row */}
                         <div style={{marginTop:8, display:"flex", alignItems:"center", justifyContent:"space-between"}}>
                           <span style={{fontSize:10, color:COLORS.text2}}>
                             AI picked: <span style={{color:pickColor(g.pick), fontWeight:700}}>{pickName(g.pick)}</span>
@@ -1234,7 +1194,7 @@ export default function App() {
             </>
           )}
 
-          {/* ─── MATCHES PAGE ──────────────────────────── */}
+          {/* ─── MATCHES PAGE — grouped by date ───────── */}
           {page === "matches" && (
             <>
               <div style={{fontSize:11, color:COLORS.text2, marginBottom:12, fontWeight:500}}>
@@ -1243,12 +1203,17 @@ export default function App() {
               {upGrouped.length === 0 && <EmptyState msg="No upcoming matches for this filter."/>}
               {upGrouped.map(({ dateKey, label, games }) => (
                 <div key={dateKey} ref={dateKey === todayKey ? todayMatchesRef : null} style={{marginBottom:24}}>
-                  <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:12}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:13,
+                  {/* Date header */}
+                  <div style={{
+                    display:"flex", alignItems:"center", gap:10, marginBottom:12
+                  }}>
+                    <div style={{
+                      fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:13,
                       letterSpacing:"0.1em", color: dateKey === todayKey ? COLORS.green : COLORS.text1,
                       background: dateKey === todayKey ? COLORS.greenFaint : COLORS.bg2,
                       border:`1px solid ${dateKey === todayKey ? COLORS.greenBorder : COLORS.border}`,
-                      borderRadius:6, padding:"4px 12px"}}>
+                      borderRadius:6, padding:"4px 12px",
+                    }}>
                       {label}
                     </div>
                     <div style={{flex:1, height:1, background:COLORS.border}}/>
@@ -1269,7 +1234,7 @@ export default function App() {
             </>
           )}
 
-          {/* ─── RESULTS PAGE ──────────────────────────── */}
+          {/* ─── RESULTS PAGE — grouped by date ──────── */}
           {page === "results" && (
             <>
               {(() => {
@@ -1280,9 +1245,9 @@ export default function App() {
                 return (
                   <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:14}}>
                     {[
-                      {label:"CORRECT", val:wins,    col:COLORS.green, bg:COLORS.greenFaint, bc:COLORS.greenBorder},
-                      {label:"WRONG",   val:losses,  col:COLORS.red,   bg:COLORS.redFaint,   bc:"rgba(255,82,82,0.22)"},
-                      {label:"WIN RATE",val:`${rate}%`, col:COLORS.gold, bg:COLORS.goldFaint, bc:COLORS.goldBorder},
+                      {label:"CORRECT", val:wins, col:COLORS.green, bg:COLORS.greenFaint, bc:COLORS.greenBorder},
+                      {label:"WRONG",   val:losses, col:COLORS.red, bg:COLORS.redFaint, bc:"rgba(255,82,82,0.22)"},
+                      {label:"WIN RATE", val:`${rate}%`, col:COLORS.gold, bg:COLORS.goldFaint, bc:COLORS.goldBorder},
                     ].map(s => (
                       <div key={s.label} style={{background:s.bg, border:`1px solid ${s.bc}`, borderRadius:11, padding:"11px 14px", textAlign:"center"}}>
                         <div style={{fontSize:9, color:s.col, letterSpacing:"0.1em", fontWeight:700, marginBottom:4}}>{s.label}</div>
@@ -1297,10 +1262,14 @@ export default function App() {
               {resGrouped.slice().reverse().map(({ dateKey, label, games }) => (
                 <div key={dateKey} style={{marginBottom:20}}>
                   <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:10}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:13,
+                    <div style={{
+                      fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:13,
                       letterSpacing:"0.1em", color:COLORS.text1,
                       background:COLORS.bg2, border:`1px solid ${COLORS.border}`,
-                      borderRadius:6, padding:"4px 12px"}}>{label}</div>
+                      borderRadius:6, padding:"4px 12px",
+                    }}>
+                      {label}
+                    </div>
                     <div style={{flex:1, height:1, background:COLORS.border}}/>
                     <div style={{fontSize:10, color:COLORS.text2, fontWeight:600}}>{games.length} result{games.length!==1?"s":""}</div>
                   </div>
@@ -1333,14 +1302,16 @@ export default function App() {
                       <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:38, color:isPos?COLORS.green:COLORS.red, lineHeight:1, letterSpacing:"-0.01em"}}>
                         {isPos ? "+" : ""}€{Math.abs(pnl).toFixed(2)}
                       </div>
-                      <div style={{fontSize:12, color:isPos?COLORS.green:COLORS.red, fontWeight:700, paddingBottom:4, opacity:0.75}}>ROI {isPos?"+":""}{roi}%</div>
+                      <div style={{fontSize:12, color:isPos?COLORS.green:COLORS.red, fontWeight:700, paddingBottom:4, opacity:0.75}}>
+                        ROI {isPos?"+":""}{roi}%
+                      </div>
                     </div>
                     <div style={{display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8}}>
                       {[
-                        {label:"BETS",     val:history.length,                         col:COLORS.text1},
-                        {label:"WON",      val:wonCount,                               col:COLORS.green},
-                        {label:"LOST",     val:settledCount-wonCount,                  col:COLORS.red},
-                        {label:"WIN RATE", val:winRate!==null?`${winRate}%`:"—",       col:COLORS.gold},
+                        {label:"BETS",    val:history.length,             col:COLORS.text1},
+                        {label:"WON",     val:wonCount,                   col:COLORS.green},
+                        {label:"LOST",    val:settledCount-wonCount,      col:COLORS.red},
+                        {label:"WIN RATE",val:winRate!==null?`${winRate}%`:"—", col:COLORS.gold},
                       ].map(s => (
                         <div key={s.label} style={{background:"rgba(0,0,0,0.25)", borderRadius:9, padding:"8px 10px", textAlign:"center"}}>
                           <div style={{fontSize:8, color:COLORS.text2, letterSpacing:"0.1em", fontWeight:700, marginBottom:3}}>{s.label}</div>
@@ -1351,7 +1322,6 @@ export default function App() {
                   </div>
                 );
               })()}
-
               <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:18}}>
                 {[
                   {label:"TOTAL WAGERED", val:`€${totalWagered.toFixed(2)}`, col:COLORS.text0, sub:"All-time staked"},
@@ -1364,26 +1334,16 @@ export default function App() {
                   </div>
                 ))}
               </div>
-
-              {settledHistory.length > 0 && (
+              {settled.length > 0 && (
                 <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:12}}>
                   <div style={{fontSize:9, color:COLORS.text2, letterSpacing:"0.14em", fontWeight:700}}>BET HISTORY</div>
                   <div style={{flex:1, height:1, background:COLORS.border}}/>
-                  <div style={{fontSize:9, color:COLORS.text2}}>{settledHistory.length} ticket{settledHistory.length!==1?"s":""}</div>
+                  <div style={{fontSize:9, color:COLORS.text2}}>{settled.length} ticket{settled.length!==1?"s":""}</div>
                 </div>
               )}
-
-              {settledHistory.length === 0
+              {settled.length === 0
                 ? <EmptyState msg="No bets yet. Browse matches and build your slip!"/>
-                : settledHistory.map(e => (
-                    <HistoryCard
-                      key={e.id}
-                      entry={e}
-                      open={histExp===e.id}
-                      onToggle={() => setHistExp(histExp===e.id ? null : e.id)}
-                      resolvedGameMap={resolvedGameMap}
-                    />
-                  ))
+                : settled.map(e => <HistoryCard key={e.id} entry={e} open={histExp===e.id} onToggle={() => setHistExp(histExp===e.id ? null : e.id)}/>)
               }
             </>
           )}
@@ -1402,7 +1362,7 @@ export default function App() {
             gap:2, position:"relative", color:page===n.id?COLORS.green:COLORS.text2}}>
             <span style={{fontSize:19, lineHeight:1}}>{n.icon}</span>
             <span style={{fontSize:9, fontWeight:page===n.id?800:500, letterSpacing:"0.05em"}}>{n.label.toUpperCase()}</span>
-            {(n as any).badge>0 && <span style={{position:"absolute", top:4, right:"calc(50% - 16px)", background:COLORS.red, color:"#fff", borderRadius:999, fontSize:9, fontWeight:800, minWidth:15, height:15, lineHeight:"15px", textAlign:"center", padding:"0 3px"}}>{(n as any).badge}</span>}
+            {n.badge>0 && <span style={{position:"absolute", top:4, right:"calc(50% - 16px)", background:COLORS.red, color:"#fff", borderRadius:999, fontSize:9, fontWeight:800, minWidth:15, height:15, lineHeight:"15px", textAlign:"center", padding:"0 3px"}}>{n.badge}</span>}
             {page===n.id && <span style={{position:"absolute", bottom:0, left:"20%", right:"20%", height:2.5, background:COLORS.green, borderRadius:2}}/>}
           </button>
         ))}
@@ -1442,9 +1402,6 @@ export default function App() {
                   <div style={{flex:1, paddingRight:8}}>
                     <div style={{fontSize:10, color:COLORS.text2, marginBottom:2}}>{b.flag} {b.league}</div>
                     <div style={{fontWeight:700, fontSize:13, lineHeight:1.3}}>{b.home} vs {b.away}</div>
-                    {b.kick && (
-                      <div style={{fontSize:10, color:COLORS.text2, marginTop:2}}>🕐 {formatKickDate(b.kick)}</div>
-                    )}
                     <div style={{display:"flex", alignItems:"center", gap:6, marginTop:5}}>
                       <span style={{fontSize:11, color:pickColor(b.pick), fontWeight:700}}>{pickName(b.pick)}</span>
                       <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:4, padding:"1px 7px"}}>{b.odds.toFixed(2)}</span>
@@ -1510,20 +1467,23 @@ export default function App() {
 }
 
 /* ── COMPACT ROW ─────────────────────────────────────────────── */
-function CompactRow({game, inSlip, onAdd, liveData}: any) {
+function CompactRow({game, inSlip, onAdd, liveData}) {
   const cm  = confMeta(game.conf);
   const ai  = oddsFor(game, game.pick);
-  const status     = getResolvedStatus(game, liveData);
+
+  // Derive display state from live API data first, then fall back to kick time
+  const status   = getResolvedStatus(game, liveData);
   const isLive     = status === "live" || status === "halftime";
   const isFinished = status === "finished";
   const canAdd     = status === "upcoming";
-  const score      = getResolvedScore(game, liveData);
+
+  const score = getResolvedScore(game, liveData);
   const hs = score?.h ?? null;
   const as_ = score?.a ?? null;
-  const hasScore   = hs !== null && as_ !== null;
-  const minute     = liveData ? formatMinute(liveData) : null;
-  const isHT       = liveData?.statusShort === "HT";
-  const countdown  = formatLiveCountdown(liveData);
+  const hasScore = hs !== null && as_ !== null;
+  const minute   = liveData ? formatMinute(liveData) : null;
+  const isHT     = liveData?.statusShort === "HT";
+  const countdown = formatLiveCountdown(liveData);
 
   return (
     <div className="card-hover fadeUp" style={{
@@ -1532,6 +1492,7 @@ function CompactRow({game, inSlip, onAdd, liveData}: any) {
       borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", gap:10,
     }}>
       <div style={{flex:1, minWidth:0}}>
+        {/* Meta row */}
         <div style={{fontSize:10, color:COLORS.text2, marginBottom:4, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap"}}>
           <span>{game.flag}</span>
           <span>{game.league}</span>
@@ -1543,18 +1504,35 @@ function CompactRow({game, inSlip, onAdd, liveData}: any) {
             </span>
           )}
           {isFinished && <span style={{color:COLORS.text2, fontWeight:700}}>FT</span>}
-          {canAdd && <span>{formatKickDate(game.kick)}</span>}
+          {canAdd && <span>{game.display}</span>}
         </div>
+
+        {/* Teams */}
         <div style={{fontWeight:700, fontSize:13}}>
           {game.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:11}}>vs</span> {game.away}
         </div>
+
+        {/* Status row */}
         <div style={{display:"flex", alignItems:"center", gap:6, marginTop:5, flexWrap:"wrap"}}>
           {(isLive || isFinished) && hasScore ? (
-            <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18,
-              color: isLive ? COLORS.green : COLORS.text0,
-              background: isLive ? COLORS.greenFaint : COLORS.bg3,
-              border:`1px solid ${isLive ? COLORS.greenBorder : COLORS.border}`,
-              borderRadius:7, padding:"1px 10px", letterSpacing:"0.04em"}}>{hs} – {as_}</span>
+            <>
+              <span style={{
+                fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18,
+                color: isLive ? COLORS.green : COLORS.text0,
+                background: isLive ? COLORS.greenFaint : COLORS.bg3,
+                border:`1px solid ${isLive ? COLORS.greenBorder : COLORS.border}`,
+                borderRadius:7, padding:"1px 10px", letterSpacing:"0.04em",
+              }}>{hs} – {as_}</span>
+              {/* Goal scorers */}
+              {liveData && (liveData.homeEvents.length > 0 || liveData.awayEvents.length > 0) && (
+                <span style={{fontSize:9, color:COLORS.text2}}>
+                  {[...liveData.homeEvents, ...liveData.awayEvents]
+                    .sort((a,b) => a.minute - b.minute)
+                    .map(e => `⚽ ${e.player.split(' ').pop()} ${e.minute}'`)
+                    .join("  ")}
+                </span>
+              )}
+            </>
           ) : (
             <>
               <span style={{fontSize:10, color:pickColor(game.pick), fontWeight:700}}>{pickName(game.pick)}</span>
@@ -1565,19 +1543,24 @@ function CompactRow({game, inSlip, onAdd, liveData}: any) {
           )}
         </div>
       </div>
+
+      {/* Right action */}
       {canAdd ? (
         <button className="btn" onClick={() => onAdd(game.pick)} style={{
           display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:9, flexShrink:0,
           background:inSlip?COLORS.greenFaint:COLORS.bg3,
           border:`1px solid ${inSlip?COLORS.greenBorder:COLORS.border}`,
-          color:inSlip?COLORS.green:COLORS.text1, fontSize:11, fontWeight:700}}>
+          color:inSlip?COLORS.green:COLORS.text1, fontSize:11, fontWeight:700,
+        }}>
           {inSlip ? "✓ ADDED" : `+ ${ai.toFixed(2)}`}
         </button>
       ) : (
-        <div style={{padding:"5px 10px", borderRadius:7, flexShrink:0, fontSize:9, fontWeight:800, letterSpacing:"0.07em",
+        <div style={{
+          padding:"5px 10px", borderRadius:7, flexShrink:0, fontSize:9, fontWeight:800, letterSpacing:"0.07em",
           color: isLive ? COLORS.green : COLORS.text2,
           background: isLive ? COLORS.greenFaint : COLORS.bg3,
-          border:`1px solid ${isLive ? COLORS.greenBorder : COLORS.border}`}}>
+          border:`1px solid ${isLive ? COLORS.greenBorder : COLORS.border}`,
+        }}>
           {isHT ? "HT" : isLive ? "LIVE" : "FT"}
         </div>
       )}
@@ -1586,20 +1569,24 @@ function CompactRow({game, inSlip, onAdd, liveData}: any) {
 }
 
 /* ── FULL MATCH CARD ─────────────────────────────────────────── */
-function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}: any) {
+function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}) {
   const cm = confMeta(game.conf);
-  const status     = getResolvedStatus(game, liveData);
+
+  // Derive status
+  const status   = getResolvedStatus(game, liveData);
   const isLive     = status === "live" || status === "halftime";
   const isHT       = liveData?.statusShort === "HT";
   const isFinished = status === "finished";
   const canAdd     = status === "upcoming";
-  const score      = getResolvedScore(game, liveData);
+
+  const score = getResolvedScore(game, liveData);
   const hs    = score?.h ?? null;
   const as_   = score?.a ?? null;
-  const hasScore   = hs !== null && as_ !== null;
-  const minute     = liveData ? formatMinute(liveData) : null;
-  const countdown  = formatLiveCountdown(liveData);
-  const isDrawing  = hasScore && hs === as_;
+  const hasScore  = hs !== null && as_ !== null;
+  const minute    = liveData ? formatMinute(liveData) : null;
+  const countdown = formatLiveCountdown(liveData);
+  const isDrawing = hasScore && hs === as_;
+
   const cardBorder = isLive ? COLORS.greenBorder : inSlip ? COLORS.greenBorder : COLORS.border;
   const cardBg     = isLive ? "rgba(0,230,118,0.025)" : COLORS.bg1;
 
@@ -1607,10 +1594,13 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}:
     <div className="card-hover fadeUp" style={{
       background:cardBg, border:`1px solid ${cardBorder}`, borderRadius:15, overflow:"hidden",
       animationDelay:`${delay}s`, animationFillMode:"both",
-      boxShadow: isLive ? "0 0 0 1px rgba(0,230,118,0.10), 0 4px 24px rgba(0,230,118,0.05)" : inSlip ? "0 0 0 1px rgba(0,230,118,0.1)" : "none",
+      boxShadow: isLive
+        ? "0 0 0 1px rgba(0,230,118,0.10), 0 4px 24px rgba(0,230,118,0.05)"
+        : inSlip ? "0 0 0 1px rgba(0,230,118,0.1)" : "none",
     }}>
       <div style={{padding:"14px 16px 0"}}>
-        {/* Header */}
+
+        {/* ── Header ── */}
         <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
           <div style={{display:"flex", alignItems:"center", gap:6}}>
             <span style={{fontSize:14}}>{game.flag}</span>
@@ -1621,46 +1611,72 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}:
           </div>
           <div style={{display:"flex", alignItems:"center", gap:5}}>
             {isLive && (
-              <span className="pulse" style={{fontSize:9, color:COLORS.green, background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:4, padding:"2px 8px", fontWeight:800, letterSpacing:"0.07em", display:"flex", alignItems:"center", gap:5}}>
+              <span className="pulse" style={{
+                fontSize:9, color:COLORS.green,
+                background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`,
+                borderRadius:4, padding:"2px 8px", fontWeight:800, letterSpacing:"0.07em",
+                display:"flex", alignItems:"center", gap:5,
+              }}>
                 <span style={{width:5, height:5, borderRadius:"50%", background:COLORS.green, display:"block"}}/>
                 {isHT ? "HALF TIME" : `LIVE ${minute || ""}${countdown ? ` • ${countdown}` : ""}`}
               </span>
             )}
             {isFinished && (
-              <span style={{fontSize:9, color:COLORS.text1, background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:4, padding:"2px 8px", fontWeight:800, letterSpacing:"0.07em"}}>FULL TIME</span>
+              <span style={{
+                fontSize:9, color:COLORS.text1,
+                background:COLORS.bg2, border:`1px solid ${COLORS.border}`,
+                borderRadius:4, padding:"2px 8px", fontWeight:800, letterSpacing:"0.07em",
+              }}>FULL TIME</span>
             )}
             {canAdd && (
-              <span style={{fontSize:9, color:COLORS.text2, fontFamily:"monospace", background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:4, padding:"2px 8px"}}>{formatKickDate(game.kick)}</span>
+              <span style={{
+                fontSize:9, color:COLORS.text2, fontFamily:"monospace",
+                background:COLORS.bg2, border:`1px solid ${COLORS.border}`,
+                borderRadius:4, padding:"2px 8px",
+              }}>{game.display}</span>
             )}
-            <span style={{fontSize:9, color:cm.c, background:cm.bg, border:`1px solid ${cm.bc}`, borderRadius:5, padding:"2px 7px", fontWeight:800}}>{cm.label} {game.conf}%</span>
+            <span style={{fontSize:9, color:cm.c, background:cm.bg, border:`1px solid ${cm.bc}`, borderRadius:5, padding:"2px 7px", fontWeight:800}}>
+              {cm.label} {game.conf}%
+            </span>
           </div>
         </div>
 
-        {/* Score / VS */}
+        {/* ── Score / VS block ── */}
         <div style={{marginBottom:10}}>
           {(isLive || isFinished) && hasScore ? (
+            /* Live or finished — show real score */
             <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:8, alignItems:"center"}}>
               <div style={{textAlign:"right"}}>
-                <div style={{fontWeight:800, fontSize:15, lineHeight:1.2, color: hs > as_ ? COLORS.text0 : COLORS.text1}}>{game.home}</div>
+                <div style={{fontWeight:800, fontSize:15, lineHeight:1.2,
+                  color: hs > as_ ? COLORS.text0 : COLORS.text1}}>{game.home}</div>
                 <div style={{fontSize:9, color:COLORS.text2, marginTop:2, letterSpacing:"0.06em"}}>HOME</div>
               </div>
-              <div style={{textAlign:"center", minWidth:76,
+              <div style={{
+                textAlign:"center", minWidth:76,
                 background: isLive ? COLORS.greenFaint : isDrawing ? COLORS.goldFaint : COLORS.bg2,
                 border:`1px solid ${isLive ? COLORS.greenBorder : isDrawing ? COLORS.goldBorder : COLORS.border}`,
-                borderRadius:12, padding:"10px 12px"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:26,
+                borderRadius:12, padding:"10px 12px",
+              }}>
+                <div style={{
+                  fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:26,
                   color: isLive ? COLORS.green : isDrawing ? COLORS.gold : COLORS.text0,
-                  letterSpacing:"0.04em", lineHeight:1}}>{hs} – {as_}</div>
-                <div style={{fontSize:8, fontWeight:800, letterSpacing:"0.1em", marginTop:4, color: isLive ? COLORS.green : COLORS.text2}}>
+                  letterSpacing:"0.04em", lineHeight:1,
+                }}>{hs} – {as_}</div>
+                <div style={{
+                  fontSize:8, fontWeight:800, letterSpacing:"0.1em", marginTop:4,
+                  color: isLive ? COLORS.green : COLORS.text2,
+                }}>
                   {isHT ? "HT" : isLive ? (minute || "LIVE") : "FT"}
                 </div>
               </div>
               <div>
-                <div style={{fontWeight: as_ > hs ? 800 : 600, fontSize:15, lineHeight:1.2, color: as_ > hs ? COLORS.text0 : COLORS.text1}}>{game.away}</div>
+                <div style={{fontWeight: as_ > hs ? 800 : 600, fontSize:15, lineHeight:1.2,
+                  color: as_ > hs ? COLORS.text0 : COLORS.text1}}>{game.away}</div>
                 <div style={{fontSize:9, color:COLORS.text2, marginTop:2, letterSpacing:"0.06em"}}>AWAY</div>
               </div>
             </div>
           ) : (
+            /* Upcoming — show VS */
             <div style={{display:"grid", gridTemplateColumns:"1fr 44px 1fr", gap:6, alignItems:"center"}}>
               <div style={{textAlign:"right"}}>
                 <div style={{fontWeight:800, fontSize:14, lineHeight:1.2}}>{game.home}</div>
@@ -1677,21 +1693,26 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}:
           )}
         </div>
 
-        {/* Goal scorers strip */}
+        {/* Goal scorers strip — live/finished */}
         {liveData && (liveData.homeEvents.length > 0 || liveData.awayEvents.length > 0) && (
-          <div style={{display:"flex", gap:8, flexWrap:"wrap", marginBottom:10, padding:"6px 10px", background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:8}}>
+          <div style={{
+            display:"flex", gap:8, flexWrap:"wrap", marginBottom:10,
+            padding:"6px 10px", background:COLORS.bg2,
+            border:`1px solid ${COLORS.border}`, borderRadius:8,
+          }}>
             {[...liveData.homeEvents, ...liveData.awayEvents]
-              .sort((a: any,b: any) => a.minute - b.minute)
-              .map((e: any, i: number) => (
+              .sort((a,b) => a.minute - b.minute)
+              .map((e, i) => (
                 <span key={i} style={{fontSize:10, color:COLORS.text1}}>
                   ⚽ <span style={{fontWeight:700}}>{e.player.split(' ').pop()}</span>{" "}
                   <span style={{color:COLORS.text2}}>{e.minute}&apos;</span>
                 </span>
-              ))}
+              ))
+            }
           </div>
         )}
 
-        {/* Win probability bar */}
+        {/* Win probability bar — upcoming only */}
         {canAdd && game.prob && (
           <div style={{marginBottom:10}}>
             <div style={{height:5, borderRadius:99, display:"flex", overflow:"hidden", gap:1.5}}>
@@ -1717,7 +1738,10 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}:
             const isAI = game.pick === o.pick;
             if (!canAdd) {
               return (
-                <div key={o.label} style={{padding:"9px 5px", borderRadius:10, textAlign:"center", border:`1px solid ${COLORS.border}`, background:COLORS.bg2, opacity:0.4}}>
+                <div key={o.label} style={{
+                  padding:"9px 5px", borderRadius:10, textAlign:"center",
+                  border:`1px solid ${COLORS.border}`, background:COLORS.bg2, opacity:0.4,
+                }}>
                   <div style={{fontSize:9, color:COLORS.text2, fontWeight:800, letterSpacing:"0.06em", marginBottom:2}}>{o.label}</div>
                   <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:17, color:COLORS.text2}}>{o.val.toFixed(2)}</div>
                 </div>
@@ -1737,19 +1761,26 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}:
         </div>
 
         {/* AI pick strip */}
-        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between",
+        <div style={{
+          display:"flex", alignItems:"center", justifyContent:"space-between",
           background: canAdd ? COLORS.greenFaint : COLORS.bg2,
           border:`1px solid ${canAdd ? COLORS.greenBorder : COLORS.border}`,
-          borderRadius:9, padding:"8px 12px", marginBottom:10, opacity: canAdd ? 1 : 0.6}}>
+          borderRadius:9, padding:"8px 12px", marginBottom:10,
+          opacity: canAdd ? 1 : 0.6,
+        }}>
           <div style={{display:"flex", alignItems:"center", gap:7}}>
             <span style={{width:7, height:7, borderRadius:"50%", background:pickColor(game.pick), flexShrink:0}}/>
-            <span style={{fontSize:12, fontWeight:700, color:canAdd ? COLORS.green : COLORS.text1}}>AI: {pickName(game.pick)}</span>
+            <span style={{fontSize:12, fontWeight:700, color:canAdd ? COLORS.green : COLORS.text1}}>
+              AI: {pickName(game.pick)}
+            </span>
           </div>
           <div style={{display:"flex", alignItems:"center", gap:6}}>
             <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, color:COLORS.gold, fontWeight:800, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"1px 8px"}}>
               {oddsFor(game, game.pick).toFixed(2)}
             </span>
-            <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, color:cm.c, fontWeight:800}}>{game.conf}%</span>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, color:cm.c, fontWeight:800}}>
+              {game.conf}%
+            </span>
           </div>
         </div>
 
@@ -1761,7 +1792,7 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}:
         </div>
       </div>
 
-      {/* Footer */}
+      {/* ── Footer ── */}
       <div style={{display:"flex", borderTop:`1px solid ${COLORS.border}`}}>
         {canAdd ? (
           <button className="btn" onClick={() => onAdd(game.pick)} style={{
@@ -1769,14 +1800,22 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}:
             background:inSlip?COLORS.greenFaint:"transparent",
             borderRight:`1px solid ${COLORS.border}`,
             fontSize:11, fontWeight:800, letterSpacing:"0.07em",
-            color:inSlip?COLORS.green:COLORS.text2}}>
+            color:inSlip?COLORS.green:COLORS.text2,
+          }}>
             {inSlip ? "✓ IN SLIP" : "+ ADD TO SLIP"}
           </button>
         ) : (
-          <div style={{flex:1, padding:"11px 14px", borderRight:`1px solid ${COLORS.border}`, fontSize:11, fontWeight:800, letterSpacing:"0.07em", textAlign:"center",
+          <div style={{
+            flex:1, padding:"11px 14px",
+            borderRight:`1px solid ${COLORS.border}`,
+            fontSize:11, fontWeight:800, letterSpacing:"0.07em",
+            textAlign:"center",
             color: isLive ? COLORS.green : COLORS.text2,
-            background: isLive ? COLORS.greenFaint : "transparent"}}>
-            {isHT ? "⏸ HALF TIME — BETTING CLOSED" : isLive ? "🟢 IN PLAY — BETTING CLOSED" : "⏹ FULL TIME — BETTING CLOSED"}
+            background: isLive ? COLORS.greenFaint : "transparent",
+          }}>
+            {isHT ? "⏸ HALF TIME — BETTING CLOSED"
+              : isLive ? "🟢 IN PLAY — BETTING CLOSED"
+              : "⏹ FULL TIME — BETTING CLOSED"}
           </div>
         )}
         <button className="btn" onClick={onExpand}
@@ -1787,7 +1826,7 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}:
 
       {expanded && (
         <div style={{padding:"12px 16px", borderTop:`1px solid ${COLORS.border}`, background:COLORS.bg0}}>
-          {game.tips?.map((t: string, i: number) => (
+          {game.tips?.map((t, i) => (
             <div key={i} style={{display:"flex", gap:7, fontSize:11, color:COLORS.text1, marginBottom:7, lineHeight:1.65}}>
               <span style={{color:COLORS.green, flexShrink:0, marginTop:1}}>›</span><span>{t}</span>
             </div>
@@ -1803,7 +1842,7 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}:
                 <div key={f.label} style={{background:COLORS.bg2, borderRadius:9, padding:"9px 10px"}}>
                   <div style={{fontSize:9, color:COLORS.text2, marginBottom:5, fontWeight:700, letterSpacing:"0.06em"}}>{f.label.toUpperCase()}</div>
                   <div style={{display:"flex", gap:3}}>
-                    {f.v.split("").map((c: string, i: number) => {
+                    {f.v.split("").map((c, i) => {
                       const col = c==="W"?COLORS.green : c==="D"?COLORS.gold : COLORS.red;
                       return <span key={i} style={{width:19, height:19, borderRadius:5, background:`${col}18`, color:col, fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center"}}>{c}</span>;
                     })}
@@ -1819,7 +1858,7 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0}:
 }
 
 /* ── RESULT CARD ─────────────────────────────────────────────── */
-function ResultCard({game, delay=0}: any) {
+function ResultCard({game, delay=0}) {
   const hW      = game.score.h > game.score.a;
   const aW      = game.score.a > game.score.h;
   const dr      = game.score.h === game.score.a;
@@ -1830,9 +1869,13 @@ function ResultCard({game, delay=0}: any) {
       background: COLORS.bg1,
       border:`1px solid ${correct ? COLORS.greenBorder : "rgba(255,82,82,0.2)"}`,
       borderRadius:14, overflow:"hidden",
-      animationDelay:`${delay}s`, animationFillMode:"both"}}>
+      animationDelay:`${delay}s`, animationFillMode:"both",
+    }}>
+      {/* Top accent bar */}
       <div style={{height:3, background: correct ? COLORS.green : COLORS.red, opacity:0.7}}/>
+
       <div style={{padding:"14px 16px"}}>
+        {/* Meta row */}
         <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12}}>
           <div style={{display:"flex", alignItems:"center", gap:6}}>
             <span style={{fontSize:13}}>{game.flag}</span>
@@ -1843,41 +1886,73 @@ function ResultCard({game, delay=0}: any) {
           </div>
           <div style={{display:"flex", alignItems:"center", gap:7}}>
             <span style={{fontSize:10, color:COLORS.text2, fontFamily:"monospace"}}>{game.display}</span>
-            <span style={{fontSize:10, fontWeight:900, letterSpacing:"0.07em", padding:"3px 10px", borderRadius:999,
+            <span style={{
+              fontSize:10, fontWeight:900, letterSpacing:"0.07em",
+              padding:"3px 10px", borderRadius:999,
               background: correct ? COLORS.greenFaint : COLORS.redFaint,
               border:`1px solid ${correct ? COLORS.greenBorder : "rgba(255,82,82,0.25)"}`,
-              color: correct ? COLORS.green : COLORS.red}}>
+              color: correct ? COLORS.green : COLORS.red,
+            }}>
               {correct ? "✓ CORRECT" : "✗ WRONG"}
             </span>
           </div>
         </div>
+
+        {/* Score block — hero element */}
         <div style={{display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:10, alignItems:"center", marginBottom:12}}>
           <div style={{textAlign:"right"}}>
-            <div style={{fontWeight: hW ? 900 : 500, fontSize:15, lineHeight:1.2, color: hW ? COLORS.text0 : COLORS.text2}}>{game.home}</div>
+            <div style={{
+              fontWeight: hW ? 900 : 500, fontSize:15, lineHeight:1.2,
+              color: hW ? COLORS.text0 : COLORS.text2,
+            }}>{game.home}</div>
             <div style={{fontSize:9, color:COLORS.text2, marginTop:3, letterSpacing:"0.06em"}}>HOME</div>
           </div>
-          <div style={{textAlign:"center", minWidth:80,
+
+          <div style={{
+            textAlign:"center", minWidth:80,
             background: dr ? COLORS.goldFaint : correct ? COLORS.greenFaint : COLORS.redFaint,
             border:`1px solid ${dr ? COLORS.goldBorder : correct ? COLORS.greenBorder : "rgba(255,82,82,0.25)"}`,
-            borderRadius:12, padding:"10px 14px"}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:30,
+            borderRadius:12, padding:"10px 14px",
+          }}>
+            <div style={{
+              fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:30,
               color: dr ? COLORS.gold : correct ? COLORS.green : COLORS.text0,
-              letterSpacing:"0.04em", lineHeight:1}}>{game.score.h}–{game.score.a}</div>
-            <div style={{fontSize:8, color: dr ? COLORS.gold : COLORS.text2, fontWeight:800, letterSpacing:"0.12em", marginTop:4}}>FULL TIME</div>
+              letterSpacing:"0.04em", lineHeight:1,
+            }}>
+              {game.score.h}–{game.score.a}
+            </div>
+            <div style={{fontSize:8, color: dr ? COLORS.gold : COLORS.text2, fontWeight:800, letterSpacing:"0.12em", marginTop:4}}>
+              FULL TIME
+            </div>
           </div>
+
           <div>
-            <div style={{fontWeight: aW ? 900 : 500, fontSize:15, lineHeight:1.2, color: aW ? COLORS.text0 : COLORS.text2}}>{game.away}</div>
+            <div style={{
+              fontWeight: aW ? 900 : 500, fontSize:15, lineHeight:1.2,
+              color: aW ? COLORS.text0 : COLORS.text2,
+            }}>{game.away}</div>
             <div style={{fontSize:9, color:COLORS.text2, marginTop:3, letterSpacing:"0.06em"}}>AWAY</div>
           </div>
         </div>
-        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", borderRadius:9,
+
+        {/* AI pick strip */}
+        <div style={{
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:"8px 12px", borderRadius:9,
           background: correct ? COLORS.greenFaint : COLORS.redFaint,
-          border:`1px solid ${correct ? COLORS.greenBorder : "rgba(255,82,82,0.15)"}`}}>
+          border:`1px solid ${correct ? COLORS.greenBorder : "rgba(255,82,82,0.15)"}`,
+        }}>
           <div style={{display:"flex", alignItems:"center", gap:6}}>
             <span style={{width:6, height:6, borderRadius:"50%", background:pickColor(game.pick), flexShrink:0}}/>
-            <span style={{fontSize:11, color:COLORS.text1}}>AI pick: <span style={{color:pickColor(game.pick), fontWeight:700}}>{pickName(game.pick)}</span></span>
+            <span style={{fontSize:11, color:COLORS.text1}}>
+              AI pick: <span style={{color:pickColor(game.pick), fontWeight:700}}>{pickName(game.pick)}</span>
+            </span>
           </div>
-          <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, fontWeight:800, color:COLORS.gold, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"1px 8px"}}>
+          <span style={{
+            fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, fontWeight:800,
+            color:COLORS.gold, background:COLORS.goldFaint,
+            border:`1px solid ${COLORS.goldBorder}`, borderRadius:5, padding:"1px 8px",
+          }}>
             {oddsFor(game, game.pick).toFixed(2)}
           </span>
         </div>
@@ -1886,36 +1961,21 @@ function ResultCard({game, delay=0}: any) {
   );
 }
 
-/* ── HISTORY CARD — fully rewritten ─────────────────────────── */
-function HistoryCard({ entry, open, onToggle, resolvedGameMap }: any) {
-  const isWon  = entry.status === "won";
-  const isLost = entry.status === "lost";
-  const isPend = entry.status === "pending";
-  const sc     = isWon ? COLORS.green : isLost ? COLORS.red : COLORS.gold;
-  const bcol   = isWon ? COLORS.greenBorder : isLost ? "rgba(255,82,82,0.22)" : COLORS.border;
-  const pnl    = isWon ? +(entry.potReturn - entry.totalStake).toFixed(2) : isLost ? -entry.totalStake : null;
-  const ref    = `#${String(entry.id).slice(-6).toUpperCase()}`;
+/* ── HISTORY CARD ────────────────────────────────────────────── */
+function HistoryCard({entry, open, onToggle}) {
+  const isWon    = entry.status === "won";
+  const isLost   = entry.status === "lost";
+  const isPend   = entry.status === "pending";
+  const sc       = isWon ? COLORS.green : isLost ? COLORS.red : COLORS.gold;
+  const bcol     = isWon ? COLORS.greenBorder : isLost ? "rgba(255,82,82,0.22)" : COLORS.border;
+  const pnl      = isWon ? +(entry.potReturn - entry.totalStake).toFixed(2)
+                 : isLost ? -entry.totalStake : null;
+  const settlementAmount = isWon ? +(entry.settlementAmount ?? entry.potReturn).toFixed(2) : 0;
+  const ref      = `#${String(entry.id).slice(-6).toUpperCase()}`;
   const placedAt = new Date(entry.placedAt);
   const dateStr  = placedAt.toLocaleDateString("en-GB", {day:"numeric", month:"short", year:"numeric"});
   const timeStr  = placedAt.toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
   const isAcca   = entry.bets.length > 1;
-
-  // Compute per-bet enriched data: game time, live status, score
-  const enrichedBets = entry.bets.map((b: any) => {
-    const liveGame = resolvedGameMap.get(b.id);
-    const gameData = liveGame || GAMES.find((g: any) => g.id === b.id);
-    const liveStatus = liveGame ? liveGame.st : (gameData ? getFallbackStatus(gameData) : "upcoming");
-    const score = b.score || liveGame?.score || null;
-    const result = b.result !== "pending" ? b.result
-      : (score && gameData ? (didWin(gameData, b.pick) ? "won" : "lost") : "pending");
-    return {
-      ...b,
-      kick: gameData?.kick || null,
-      score,
-      liveStatus,
-      result,
-    };
-  });
 
   return (
     <div className="fadeUp" style={{
@@ -1923,10 +1983,10 @@ function HistoryCard({ entry, open, onToggle, resolvedGameMap }: any) {
       borderRadius:15, overflow:"hidden", marginBottom:10,
       boxShadow: isWon ? "0 0 0 1px rgba(0,230,118,0.08), 0 2px 16px rgba(0,230,118,0.04)" : "none",
     }}>
-      {/* Top accent bar */}
+      {/* Top accent bar — colour-coded */}
       <div style={{height:3, background: isWon ? COLORS.green : isLost ? COLORS.red : COLORS.gold, opacity:0.7}}/>
 
-      {/* Clickable header */}
+      {/* ── Clickable header ── */}
       <div onClick={onToggle} style={{padding:"14px 16px", cursor:"pointer"}}>
         <div style={{display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10}}>
           {/* Left */}
@@ -1934,75 +1994,77 @@ function HistoryCard({ entry, open, onToggle, resolvedGameMap }: any) {
             <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:5}}>
               <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:13, color:COLORS.text2, letterSpacing:"0.08em"}}>{ref}</span>
               {isAcca && (
-                <span style={{fontSize:9, fontWeight:800, letterSpacing:"0.07em", color:COLORS.blue, background:COLORS.blueFaint, border:"1px solid rgba(68,138,255,0.28)", borderRadius:4, padding:"1px 7px"}}>ACCA</span>
+                <span style={{fontSize:9, fontWeight:800, letterSpacing:"0.07em",
+                  color:COLORS.blue, background:COLORS.blueFaint,
+                  border:"1px solid rgba(68,138,255,0.28)", borderRadius:4, padding:"1px 7px"}}>ACCA</span>
               )}
               <span style={{fontSize:9, color:COLORS.text2}}>{dateStr} · {timeStr}</span>
             </div>
             <div style={{fontWeight:800, fontSize:14, color:COLORS.text0, lineHeight:1.3}}>
               {entry.bets.length === 1
                 ? <>{entry.bets[0].home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:12}}>vs</span> {entry.bets[0].away}</>
-                : <>{entry.bets.length}-Fold Accumulator</>}
+                : <>{entry.bets.length}-Fold Accumulator</>
+              }
             </div>
-
-            {/* Game time for single bets */}
-            {entry.bets.length === 1 && enrichedBets[0].kick && (
-              <div style={{display:"flex", alignItems:"center", gap:6, marginTop:4}}>
-                <span style={{fontSize:10, color:COLORS.text2}}>🕐 {formatKickDate(enrichedBets[0].kick)}</span>
-                {enrichedBets[0].liveStatus === "live" && (
-                  <span className="pulse" style={{fontSize:9, color:COLORS.green, fontWeight:800, background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:4, padding:"1px 6px", display:"flex", alignItems:"center", gap:3}}>
-                    <span style={{width:4, height:4, borderRadius:"50%", background:COLORS.green, display:"block"}}/>LIVE
-                  </span>
-                )}
-                {enrichedBets[0].liveStatus === "finished" && enrichedBets[0].score && (
-                  <span style={{fontSize:10, fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900,
-                    color: enrichedBets[0].result === "won" ? COLORS.green : enrichedBets[0].result === "lost" ? COLORS.red : COLORS.text0,
-                    background:COLORS.bg2, border:`1px solid ${COLORS.border}`, borderRadius:5, padding:"1px 8px"}}>
-                    {enrichedBets[0].score.h}–{enrichedBets[0].score.a} FT
-                  </span>
-                )}
-              </div>
-            )}
-
             {entry.bets.length === 1 && (
               <div style={{fontSize:11, color:pickColor(entry.bets[0].pick), fontWeight:700, marginTop:3}}>
                 {pickName(entry.bets[0].pick)}
+                {/* Show score inline for single bets */}
+                {entry.bets[0].score && (
+                  <span style={{
+                    marginLeft:8, fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, fontWeight:900,
+                    color: entry.bets[0].result === "won" ? COLORS.green : entry.bets[0].result === "lost" ? COLORS.red : COLORS.text2,
+                    background: COLORS.bg2, border:`1px solid ${COLORS.border}`,
+                    borderRadius:5, padding:"1px 8px",
+                  }}>
+                    {entry.bets[0].score.h}–{entry.bets[0].score.a} FT
+                  </span>
+                )}
               </div>
             )}
           </div>
 
           {/* Right: status + balance impact */}
           <div style={{display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5, flexShrink:0}}>
-            <div style={{padding:"4px 12px", borderRadius:20, fontSize:10, fontWeight:900, letterSpacing:"0.08em", background:`${sc}18`, color:sc, border:`1px solid ${sc}40`}}>
+            <div style={{
+              padding:"4px 12px", borderRadius:20, fontSize:10, fontWeight:900,
+              letterSpacing:"0.08em", background:`${sc}18`, color:sc, border:`1px solid ${sc}40`,
+            }}>
               {isPend ? "⏳ PENDING" : isWon ? "✓ WON" : "✗ LOST"}
             </div>
-            {/* Balance impact */}
+            {/* Balance impact badge */}
             {!isPend && pnl !== null && (
-              <div style={{fontSize:11, fontWeight:800, color: isWon ? COLORS.green : COLORS.red}}>
-                {isWon ? `BAL +€${entry.potReturn.toFixed(2)}` : `LOST €${entry.totalStake.toFixed(2)}`}
-              </div>
-            )}
-            {isPend && (
-              <div style={{fontSize:10, color:COLORS.gold, fontWeight:600}}>
-                Pot. +€{entry.potReturn.toFixed(2)}
+              <div style={{
+                fontSize:11, fontWeight:800,
+                color: isWon ? COLORS.green : COLORS.red,
+              }}>
+                {isWon ? `BAL +€${settlementAmount.toFixed(2)}` : `BAL +€0.00`}
               </div>
             )}
           </div>
         </div>
 
-        {/* Financial summary */}
-        <div style={{display:"grid", gridTemplateColumns: isAcca ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr",
-          gap:0, marginTop:12, background:COLORS.bg0, borderRadius:10, border:`1px solid ${COLORS.border}`, overflow:"hidden"}}>
+        {/* ── Financial summary row ── */}
+        <div style={{
+          display:"grid", gridTemplateColumns: isAcca ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr",
+          gap:0, marginTop:12, background:COLORS.bg0, borderRadius:10,
+          border:`1px solid ${COLORS.border}`, overflow:"hidden",
+        }}>
           {[
-            {label:"STAKE",  val:`€${entry.totalStake.toFixed(2)}`, col:COLORS.text1},
-            ...(isAcca ? [{label:"ODDS", val:`${entry.accumOdds}×`, col:COLORS.gold}] : []),
-            {label:"RETURN", val:`€${entry.potReturn.toFixed(2)}`,  col:COLORS.text0},
+            {label:"STAKE",   val:`€${entry.totalStake.toFixed(2)}`,  col:COLORS.text1},
+            ...(isAcca ? [{label:"ODDS", val:`${entry.accumOdds}×`,    col:COLORS.gold}] : []),
+            {label:"RETURN",  val:`€${entry.potReturn.toFixed(2)}`,   col:COLORS.text0},
             {label: isWon ? "PROFIT" : isLost ? "LOSS" : "P&L",
              val: pnl !== null ? `${pnl >= 0 ? "+" : ""}€${Math.abs(pnl).toFixed(2)}` : "—",
              col: pnl === null ? COLORS.gold : pnl >= 0 ? COLORS.green : COLORS.red},
           ].map((f, fi, arr) => (
-            <div key={f.label} style={{padding:"10px 12px", textAlign:"center",
+            <div key={f.label} style={{
+              padding:"10px 12px", textAlign:"center",
               borderRight: fi < arr.length-1 ? `1px solid ${COLORS.border}` : "none",
-              background: fi === arr.length-1 && !isPend ? (isWon ? "rgba(0,230,118,0.04)" : "rgba(255,82,82,0.04)") : "transparent"}}>
+              background: fi === arr.length-1 && !isPend
+                ? (isWon ? "rgba(0,230,118,0.04)" : "rgba(255,82,82,0.04)")
+                : "transparent",
+            }}>
               <div style={{fontSize:8, color:COLORS.text2, letterSpacing:"0.1em", fontWeight:700, marginBottom:4}}>{f.label}</div>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:15, color:f.col}}>{f.val}</div>
             </div>
@@ -2016,28 +2078,33 @@ function HistoryCard({ entry, open, onToggle, resolvedGameMap }: any) {
         </div>
       </div>
 
-      {/* Expanded selections */}
+      {/* ── Expanded selections ── */}
       {open && (
         <div style={{borderTop:`1px solid ${COLORS.border}`, background:COLORS.bg0}}>
-          {enrichedBets.map((b: any, i: number) => {
-            const rc  = b.result==="won" ? COLORS.green : b.result==="lost" ? COLORS.red : COLORS.gold;
-            const rbg = b.result==="won" ? COLORS.greenFaint : b.result==="lost" ? COLORS.redFaint : COLORS.goldFaint;
-            const rbc = b.result==="won" ? COLORS.greenBorder : b.result==="lost" ? "rgba(255,82,82,0.3)" : COLORS.goldBorder;
-            const isLast = i === enrichedBets.length - 1;
-            const hW  = b.score ? b.score.h > b.score.a : false;
-            const aW  = b.score ? b.score.a > b.score.h : false;
-
+          {entry.bets.map((b, i) => {
+            const rc     = b.result==="won" ? COLORS.green : b.result==="lost" ? COLORS.red : COLORS.gold;
+            const rbg    = b.result==="won" ? COLORS.greenFaint : b.result==="lost" ? COLORS.redFaint : COLORS.goldFaint;
+            const rbc    = b.result==="won" ? COLORS.greenBorder : b.result==="lost" ? "rgba(255,82,82,0.3)" : COLORS.goldBorder;
+            const isLast = i === entry.bets.length - 1;
+            // Determine score winner
+            const hW     = b.score ? b.score.h > b.score.a : false;
+            const aW     = b.score ? b.score.a > b.score.h : false;
             return (
-              <div key={i} style={{padding:"12px 16px",
+              <div key={i} style={{
+                padding:"12px 16px",
                 borderBottom: isLast ? "none" : `1px solid ${COLORS.border}`,
-                background: b.result === "won" ? "rgba(0,230,118,0.02)" : b.result === "lost" ? "rgba(255,82,82,0.02)" : "transparent"}}>
-
+                background: b.result === "won" ? "rgba(0,230,118,0.02)"
+                          : b.result === "lost" ? "rgba(255,82,82,0.02)" : "transparent",
+              }}>
                 <div style={{display:"grid", gridTemplateColumns:"auto 1fr auto", gap:12, alignItems:"center"}}>
+
                   {/* Result icon */}
-                  <div style={{width:28, height:28, borderRadius:"50%", flexShrink:0,
+                  <div style={{
+                    width:28, height:28, borderRadius:"50%", flexShrink:0,
                     background:rbg, border:`1px solid ${rbc}`,
                     display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:12, color:rc, fontWeight:900}}>
+                    fontSize:12, color:rc, fontWeight:900,
+                  }}>
                     {b.result==="pending"
                       ? <span style={{fontSize:10, animation:"pulse 1.8s ease infinite", display:"inline-block"}}>·</span>
                       : b.result==="won" ? "✓" : "✗"}
@@ -2045,66 +2112,58 @@ function HistoryCard({ entry, open, onToggle, resolvedGameMap }: any) {
 
                   {/* Match details */}
                   <div style={{minWidth:0}}>
-                    <div style={{fontSize:10, color:COLORS.text2, marginBottom:2, display:"flex", alignItems:"center", gap:5, flexWrap:"wrap"}}>
+                    <div style={{fontSize:10, color:COLORS.text2, marginBottom:3, display:"flex", alignItems:"center", gap:5}}>
                       <span>{b.flag}</span><span>{b.league}</span>
-                      {/* Game time */}
-                      {b.kick && (
-                        <span style={{color:COLORS.text2}}>· {formatKickDate(b.kick)}</span>
-                      )}
-                      {/* Live badge */}
-                      {b.liveStatus === "live" && (
-                        <span className="pulse" style={{fontSize:9, color:COLORS.green, fontWeight:800, background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:4, padding:"1px 6px", display:"flex", alignItems:"center", gap:3}}>
-                          <span style={{width:4, height:4, borderRadius:"50%", background:COLORS.green, display:"block"}}/>LIVE
-                        </span>
-                      )}
                     </div>
 
-                    {/* Score or team names */}
+                    {/* Score row — the key addition */}
                     {b.score ? (
-                      <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap"}}>
-                        <span style={{fontSize:13, fontWeight: hW ? 800 : 500, color: hW ? COLORS.text0 : COLORS.text2}}>{b.home}</span>
-                        <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18,
+                      <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:4}}>
+                        <span style={{fontSize:13, fontWeight: hW ? 800 : 500,
+                          color: hW ? COLORS.text0 : COLORS.text2}}>{b.home}</span>
+                        <span style={{
+                          fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:18,
                           color: b.result === "won" ? COLORS.green : b.result === "lost" ? COLORS.red : COLORS.text0,
-                          background:rbg, border:`1px solid ${rbc}`, borderRadius:7, padding:"1px 10px", letterSpacing:"0.04em"}}>
+                          background:rbg, border:`1px solid ${rbc}`,
+                          borderRadius:7, padding:"1px 10px", letterSpacing:"0.04em",
+                        }}>
                           {b.score.h}–{b.score.a}
                         </span>
-                        <span style={{fontSize:13, fontWeight: aW ? 800 : 500, color: aW ? COLORS.text0 : COLORS.text2}}>{b.away}</span>
+                        <span style={{fontSize:13, fontWeight: aW ? 800 : 500,
+                          color: aW ? COLORS.text0 : COLORS.text2}}>{b.away}</span>
                         <span style={{fontSize:8, color:COLORS.text2, fontWeight:700, letterSpacing:"0.1em"}}>FT</span>
                       </div>
-                    ) : b.liveStatus === "live" ? (
-                      /* Live: show teams + LIVE indicator */
-                      <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:4}}>
-                        <span style={{fontSize:13, fontWeight:700}}>{b.home}</span>
-                        <span style={{fontSize:10, color:COLORS.text2}}>vs</span>
-                        <span style={{fontSize:13, fontWeight:700}}>{b.away}</span>
-                        <span style={{fontSize:9, color:COLORS.green, fontWeight:800}}>🔴 LIVE</span>
-                      </div>
                     ) : (
-                      /* Upcoming or no score yet */
                       <div style={{fontSize:13, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3, marginBottom:4}}>
                         {b.home} <span style={{color:COLORS.text2, fontWeight:400, fontSize:11}}>vs</span> {b.away}
                       </div>
                     )}
 
-                    <div style={{display:"flex", alignItems:"center", gap:6, flexWrap:"wrap"}}>
-                      <span style={{fontSize:11, color:pickColor(b.pick), fontWeight:700}}>{pickName(b.pick)}</span>
-                      <span style={{fontSize:9, fontWeight:800, letterSpacing:"0.06em", color:rc, background:rbg, border:`1px solid ${rbc}`, borderRadius:4, padding:"1px 6px"}}>
-                        {b.result === "pending"
-                          ? b.liveStatus === "live" ? "IN PLAY"
-                          : b.liveStatus === "upcoming" ? "UPCOMING"
-                          : "PENDING"
-                        : b.result === "won" ? "WON" : "LOST"}
+                    <div style={{display:"flex", alignItems:"center", gap:6}}>
+                      <span style={{fontSize:11, color:pickColor(b.pick), fontWeight:700}}>
+                        {pickName(b.pick)}
+                      </span>
+                      <span style={{
+                        fontSize:9, fontWeight:800, letterSpacing:"0.06em",
+                        color:rc, background:rbg, border:`1px solid ${rbc}`,
+                        borderRadius:4, padding:"1px 6px",
+                      }}>
+                        {b.result === "pending" ? "PENDING" : b.result === "won" ? "WON" : "LOST"}
                       </span>
                     </div>
                   </div>
 
-                  {/* Odds + payout */}
+                  {/* Odds + single-bet payout */}
                   <div style={{textAlign:"right", flexShrink:0}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontSize:15, fontWeight:900,
-                      color:COLORS.gold, background:COLORS.goldFaint, border:`1px solid ${COLORS.goldBorder}`,
-                      borderRadius:7, padding:"4px 10px", textAlign:"center", marginBottom:4}}>
+                    <div style={{
+                      fontFamily:"'Barlow Condensed',sans-serif", fontSize:15, fontWeight:900,
+                      color:COLORS.gold, background:COLORS.goldFaint,
+                      border:`1px solid ${COLORS.goldBorder}`, borderRadius:7,
+                      padding:"4px 10px", textAlign:"center", marginBottom:4,
+                    }}>
                       {b.odds.toFixed(2)}×
                     </div>
+                    {/* Per-leg payout for single bets */}
                     {!isAcca && b.result !== "pending" && (
                       <div style={{fontSize:10, fontWeight:700, color:rc, textAlign:"center"}}>
                         {b.result === "won"
@@ -2118,12 +2177,15 @@ function HistoryCard({ entry, open, onToggle, resolvedGameMap }: any) {
             );
           })}
 
-          {/* Accumulator footer */}
+          {/* Accumulator footer summary */}
           {isAcca && (
-            <div style={{margin:"0 16px 14px", padding:"10px 14px",
+            <div style={{
+              margin:"0 16px 14px", padding:"10px 14px",
               background: isWon ? "rgba(0,230,118,0.06)" : isLost ? "rgba(255,82,82,0.06)" : COLORS.bg2,
               border:`1px solid ${isWon ? COLORS.greenBorder : isLost ? "rgba(255,82,82,0.25)" : COLORS.border}`,
-              borderRadius:10, display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8}}>
+              borderRadius:10,
+              display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8,
+            }}>
               <span style={{fontSize:11, color:COLORS.text2}}>
                 Combined: <span style={{color:COLORS.gold, fontWeight:800, fontFamily:"'Barlow Condensed',sans-serif", fontSize:14}}>{entry.accumOdds}×</span>
               </span>
@@ -2144,7 +2206,7 @@ function HistoryCard({ entry, open, onToggle, resolvedGameMap }: any) {
   );
 }
 
-function EmptyState({msg}: any) {
+function EmptyState({msg}) {
   return (
     <div style={{textAlign:"center", padding:"70px 20px", gridColumn:"1/-1"}}>
       <div style={{fontSize:44, opacity:.08, marginBottom:14}}>⚽</div>
