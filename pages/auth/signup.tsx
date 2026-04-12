@@ -94,7 +94,6 @@ export default function SignupPage() {
   return (
     <div style={{ background: C.bg0, color: C.text0, minHeight: '100vh', display: 'flex', fontFamily: "'Barlow', system-ui, sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@700;800;900&display=swap');
         *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
         a { text-decoration:none; color:inherit; }
         button { font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
@@ -157,7 +156,7 @@ export default function SignupPage() {
         <div style={{ background:C.bg2, border:`1px solid ${C.border}`, borderRadius:12, padding:'18px 20px', position:'relative', zIndex:1 }}>
           <div style={{ fontSize:20, color:C.gold, marginBottom:10, lineHeight:1 }}>❝</div>
           <p style={{ fontSize:13, color:C.text1, lineHeight:1.75, marginBottom:12, fontStyle:'italic' }}>
-            "BetAI's predictions have completely changed how I approach football betting. The confidence scores are spot on."
+            &quot;BetAI&apos;s predictions have completely changed how I approach football betting. The confidence scores are spot on.&quot;
           </p>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ width:28, height:28, borderRadius:'50%', background:C.greenFaint, border:`1px solid ${C.greenBorder}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800, color:C.green }}>DK</div>
@@ -391,7 +390,7 @@ export default function SignupPage() {
                 fontSize:36, animation:'checkPop .5s .1s ease both',
               }}>🎉</div>
               <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", fontWeight:900, fontSize:40, textTransform:'uppercase', letterSpacing:'0.01em', marginBottom:10 }}>
-                YOU'RE IN!
+                YOU&apos;RE IN!
               </h2>
               <p style={{ fontSize:14, color:C.text1, marginBottom:32, lineHeight:1.7 }}>
                 Welcome to BetAI.<br/>Redirecting to your dashboard...

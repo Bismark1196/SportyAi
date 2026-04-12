@@ -81,7 +81,6 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
     <div style={{ background: C.bg0, color: C.text0, fontFamily: "'Barlow', system-ui, sans-serif", fontWeight: 400 }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@600;700;800;900&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { overflow-x: hidden; }
         a { text-decoration: none; color: inherit; }
@@ -233,7 +232,7 @@ export default function LandingPage({ isLoggedIn }: { isLoggedIn: boolean }) {
               </h1>
 
               <p className="fade-3" style={{ fontSize: 15, color: C.text1, maxWidth: 480, lineHeight: 1.75, marginBottom: 32 }}>
-                Our Gemini AI engine analyses thousands of data points across Europe's top leagues to deliver high-confidence football predictions daily.
+                Our Gemini AI engine analyses thousands of data points across Europe&apos;s top leagues to deliver high-confidence football predictions daily.
               </p>
 
               <div className="fade-4" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 36 }}>

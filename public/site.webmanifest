@@ -1,0 +1,16 @@
+{
+  "name": "SportyAI",
+  "short_name": "SportyAI",
+  "description": "Premium football intelligence platform for curated predictions and live betting insights.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070810",
+  "theme_color": "#070810",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

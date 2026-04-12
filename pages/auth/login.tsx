@@ -70,7 +70,6 @@ export default function LoginPage() {
   return (
     <div style={{ background: C.bg0, color: C.text0, minHeight: '100vh', display: 'flex', fontFamily: "'Barlow', system-ui, sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@700;800;900&family=Barlow+Semi+Condensed:wght@600;700&display=swap');
         *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
         a { text-decoration:none; color:inherit; }
         button { font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
@@ -127,7 +126,7 @@ export default function LoginPage() {
             WELCOME<br />BACK,<br /><span style={{ color: C.green }}>CHAMPION.</span>
           </h1>
           <p style={{ fontSize: 14, color: C.text1, lineHeight: 1.75, maxWidth: 340, marginBottom: 32 }}>
-            Your AI-powered predictions are ready. Log in to access today's tips with confidence scores and expert analysis.
+            Your AI-powered predictions are ready. Log in to access today&apos;s tips with confidence scores and expert analysis.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {SIDE_FEATURES.map(f => (

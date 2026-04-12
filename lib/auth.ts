@@ -4,12 +4,22 @@ import bcrypt from 'bcryptjs';
 import type { NextApiResponse } from 'next';
 import type { IncomingMessage } from 'http';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'fallback-secret-change-in-production'
-);
-
 const COOKIE_NAME = 'betai_token';
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret) {
+    throw new Error('JWT_SECRET is required to use authenticated routes.');
+  }
+
+  if (process.env.NODE_ENV === 'production' && secret.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters in production.');
+  }
+
+  return new TextEncoder().encode(secret);
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
@@ -24,12 +34,12 @@ export async function createToken(payload: { userId: string; email: string; role
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('30d')
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifyToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return payload as { userId: string; email: string; role: string };
   } catch {
     return null;
@@ -63,8 +73,9 @@ export function setAuthCookie(res: NextApiResponse, token: string) {
 }
 
 export function clearAuthCookie(res: NextApiResponse) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   res.setHeader(
     'Set-Cookie',
-    `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax`
+    `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${secure}`
   );
 }

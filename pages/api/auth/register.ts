@@ -4,7 +4,10 @@ import prisma from '../../../lib/prisma';
 import { hashPassword, createToken, setAuthCookie } from '../../../lib/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed' });
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ message: 'Method not allowed' });
+  }
 
   const { name, email, password, promoCode } = req.body;
 
@@ -22,9 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Verify promo code
     const promo = await prisma.promoCode.findUnique({ where: { code: normalizedCode } });
 
-    if (!promo) {
-      return res.status(400).json({ message: `Promo code "${normalizedCode}" is invalid.` });
-    }
+    if (!promo) return res.status(400).json({ message: 'The promo code is invalid or unavailable.' });
     if (promo.isUsed) {
       return res.status(400).json({ message: 'This promo code has already been used.' });
     }

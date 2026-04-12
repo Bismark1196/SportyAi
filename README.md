@@ -1,216 +1,95 @@
-# ⚽ BetAI — AI-Powered Football Predictions
+# SportyAI
 
-A full-stack Next.js web app with AI-generated betting predictions, promo-code gated signup, admin dashboard, and Vercel deployment.
+SportyAI is a full-stack Next.js platform for premium football predictions. It combines subscriber-only access, admin-managed promo codes, AI-assisted match analysis, and a protected dashboard for daily picks.
 
----
+## Highlights
 
-## 🗂️ Project Structure
+- Next.js 14 with TypeScript and Prisma
+- Cookie-based authentication with role-aware admin access
+- Promo-code onboarding for controlled subscriber growth
+- Prediction dashboard, stats views, and live-score support
+- Deployment-ready for Vercel with a Postgres database such as Neon
 
-```
-betting-app/
-├── pages/
-│   ├── index.tsx              # Landing page
-│   ├── _app.tsx
-│   ├── _document.tsx
-│   ├── auth/
-│   │   ├── signup.tsx         # Promo-code signup flow
-│   │   └── login.tsx
-│   ├── dashboard/
-│   │   ├── index.tsx          # Main predictions dashboard
-│   │   ├── stats.tsx          # Statistics & charts
-│   │   └── history.tsx        # Prediction history
-│   ├── admin/
-│   │   └── index.tsx          # Admin: generate codes, manage users
-│   └── api/
-│       ├── auth/
-│       │   ├── verify-promo.ts   # Validate promo code
-│       │   ├── register.ts       # Create account
-│       │   ├── login.ts          # Sign in
-│       │   └── logout.ts         # Sign out
-│       ├── predictions/
-│       │   └── index.ts          # Fetch fixtures + AI predictions
-│       └── admin/
-│           ├── generate-codes.ts # Create new promo codes
-│           └── seed.ts           # First-time admin setup
-├── lib/
-│   ├── auth.ts                # JWT auth helpers
-│   ├── prisma.ts              # Prisma client singleton
-│   └── sports-data.ts         # Sports API + AI prediction logic
-├── styles/
-│   └── globals.css
-├── prisma/
-│   └── schema.prisma          # Database schema
-├── .env.example               # Environment variables template
-├── vercel.json                # Vercel deployment config
-└── next.config.js
-```
+## Tech Stack
 
----
+- Next.js Pages Router
+- React 18
+- Prisma ORM
+- PostgreSQL
+- Tailwind CSS
 
-## 🚀 Deployment Guide (Vercel + Neon DB)
+## Getting Started
 
-### Step 1 — Set Up Database
-
-Use **Neon** (recommended, free tier, serverless-optimized):
-
-1. Go to [neon.tech](https://neon.tech) → Create account → New project
-2. Copy the **connection string** (looks like `postgresql://user:pass@host/db?sslmode=require`)
-
-### Step 2 — Deploy to Vercel
+1. Install dependencies:
 
 ```bash
-# 1. Push your code to GitHub
-git init
-git add .
-git commit -m "Initial BetAI commit"
-gh repo create betai --public --push
-
-# 2. Import to Vercel
-# Go to vercel.com → New Project → Import from GitHub
-```
-
-### Step 3 — Set Environment Variables in Vercel
-
-In your Vercel project → Settings → Environment Variables, add:
-
-| Variable | Value |
-|---|---|
-| `DATABASE_URL` | Your Neon connection string |
-| `JWT_SECRET` | Random 32+ char string |
-| `ANTHROPIC_API_KEY` | Your Claude API key |
-| `RAPIDAPI_KEY` | API-Football key (optional) |
-| `THE_ODDS_API_KEY` | The Odds API key (optional) |
-| `SETUP_SECRET` | Any secret string for first setup |
-| `ADMIN_EMAIL` | Your admin email |
-| `ADMIN_PASSWORD` | Strong admin password |
-| `NEXTAUTH_URL` | `https://your-app.vercel.app` |
-
-### Step 4 — Run Database Migrations
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Pull env vars locally
-vercel env pull .env.local
-
-# Install deps and run migrations
 npm install
-npx prisma generate
-npx prisma db push
 ```
 
-### Step 5 — First-Time Admin Setup
-
-After deployment, call the seed endpoint **once** to create your admin account and initial promo codes:
+2. Copy the environment template and fill in your values:
 
 ```bash
-curl -X POST https://your-app.vercel.app/api/admin/seed \
-  -H "Content-Type: application/json" \
-  -d '{"setupSecret": "YOUR_SETUP_SECRET"}'
-```
-
-Response will include your initial promo codes. **Delete or disable `/api/admin/seed.ts` after this step!**
-
-### Step 6 — You're Live! 🎉
-
-- **Admin panel**: Login with your admin credentials → `/admin`
-- **Generate codes**: Admin panel → Generate Promo Codes
-- **Share codes** with paying customers
-- Customers sign up at `/auth/signup` with their promo code
-
----
-
-## 🔑 How Promo Codes Work
-
-1. **Admin generates** codes via `/admin` panel (Daily / Weekly / Monthly / Yearly plans)
-2. **You sell/share** codes to customers via WhatsApp, email, etc.
-3. **Customer enters** code at signup → code is validated and marked used atomically
-4. **One code = one account** — codes cannot be reused
-
----
-
-## 🤖 AI Predictions
-
-Predictions are powered by **Claude (claude-sonnet-4-20250514)**. The AI receives:
-- Home/Away team names
-- League and country
-- Match date
-- Live odds (if available)
-
-And returns: prediction type, confidence score (50–95%), expert analysis, and betting tips.
-
-**Caching strategy**: Predictions are stored in the database and reused for 24 hours. New predictions are only generated once per day per fixture, saving API costs.
-
----
-
-## 📡 Sports Data Sources
-
-| Source | What it provides | Cost |
-|---|---|---|
-| **API-Football** (primary) | Fixtures, results, stats | 100 req/day free |
-| **The Odds API** (secondary) | Live odds from 40+ bookmakers | 500 req/month free |
-| **Built-in mock data** (fallback) | Demo fixtures for dev/testing | Free always |
-
-Set `RAPIDAPI_KEY` to enable real fixture data. Without it, the app uses realistic mock data.
-
----
-
-## 🛠️ Local Development
-
-```bash
-# Clone and install
-npm install
-
-# Copy env template
 cp .env.example .env.local
-# Fill in your DATABASE_URL and other keys
+```
 
-# Generate Prisma client
+3. Generate the Prisma client and sync the schema:
+
+```bash
 npx prisma generate
-
-# Push schema to DB
 npx prisma db push
+```
 
-# Run dev server
+4. Start the development server:
+
+```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000).
 
----
+## Required Environment Variables
 
-## 🔒 Security Notes
+- `DATABASE_URL`: pooled or primary Postgres connection string
+- `DIRECT_URL`: direct Postgres connection string for Prisma operations
+- `JWT_SECRET`: at least 32 characters
+- `SETUP_SECRET`: one-time admin bootstrap secret
+- `ADMIN_EMAIL`: bootstrap admin email
+- `ADMIN_PASSWORD`: bootstrap admin password
+- `NEXTAUTH_URL`: public app URL
 
-- Passwords hashed with **bcrypt** (12 rounds)
-- Auth via **HTTP-only JWT cookies** (not localStorage)
-- Promo code redemption is **atomic** (database transaction — no double-use)
-- Admin routes protected by **role check** on every request
-- All API routes validate auth tokens server-side
+Optional provider keys:
 
----
+- `FOOTBALL_DATA_API_KEY`
+- `GEMINI_API_KEY`
+- `GROQ_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `RAPIDAPI_KEY`
+- `THE_ODDS_API_KEY`
 
-## 📱 Features Summary
+## Admin Bootstrap
 
-| Feature | Status |
-|---|---|
-| Landing page | ✅ |
-| Promo code signup | ✅ |
-| JWT authentication | ✅ |
-| AI predictions dashboard | ✅ |
-| League filtering | ✅ |
-| Confidence scores | ✅ |
-| Statistics page + charts | ✅ |
-| Prediction history | ✅ |
-| Admin panel | ✅ |
-| Generate promo codes | ✅ |
-| User management | ✅ |
-| Real-time sports data | ✅ (with API key) |
-| Vercel deployment ready | ✅ |
-| Mobile responsive | ✅ |
+The project includes an idempotent setup route at `/api/admin/seed` for first-time admin creation.
 
----
+Send a `POST` request with:
 
-## ⚠️ Responsible Gambling
+```json
+{
+  "setupSecret": "your-setup-secret"
+}
+```
 
-This platform is for entertainment purposes. Always encourage users to gamble responsibly and within their means.
+The route uses `ADMIN_EMAIL` and `ADMIN_PASSWORD` from your environment. After first-time setup, rotate the setup secret or disable the endpoint in production.
+
+## Production Notes
+
+- Never commit populated `.env` files or real credentials.
+- Use a long `JWT_SECRET` and strong admin password.
+- Keep `/api/health` for uptime checks only; it now returns minimal operational status.
+- Review setup surfaces before launch and disable anything you no longer need.
+
+## Scripts
+
+- `npm run dev`: start the local dev server
+- `npm run build`: build for production
+- `npm run start`: run the production build
+- `npm run lint`: run the Next.js linter

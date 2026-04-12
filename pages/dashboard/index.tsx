@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/router";
 import { useLiveScores, getScoreStatus, formatMinute, LiveScore } from "../../lib/useLiveScores";
 
@@ -284,6 +284,32 @@ const didWin = (g, p) => {
   return null;
 };
 
+const getFallbackStatus = game => {
+  if (game.st === "result" || game.score) return "finished";
+  const now  = Date.now();
+  const kick = new Date(game.kick).getTime();
+  const mins = (now - kick) / 60000;
+  if (kick > now) return "upcoming";
+  if (mins <= 120) return "live";
+  return "finished";
+};
+
+const getResolvedStatus = (game, liveData) => liveData ? getScoreStatus(liveData) : getFallbackStatus(game);
+
+const getResolvedScore = (game, liveData) => {
+  const hs = liveData?.homeScore ?? null;
+  const as_ = liveData?.awayScore ?? null;
+  if (hs !== null && as_ !== null) return { h: hs, a: as_ };
+  return game.score ?? null;
+};
+
+const formatLiveCountdown = liveData => {
+  if (!liveData || liveData.elapsed === null || liveData.statusShort === "HT") return null;
+  const target = liveData.statusShort === "ET" || liveData.statusShort === "P" ? 120 : 90;
+  const remaining = Math.max(target - liveData.elapsed, 0);
+  return `${remaining}m left`;
+};
+
 /* ── DATE HELPERS ─────────────────────────────────────────── */
 const toDateKey = isoStr => isoStr.slice(0, 10); // "YYYY-MM-DD"
 
@@ -301,18 +327,26 @@ const formatDateLabel = isoDateKey => {
 
 const getTodayKey = () => new Date().toISOString().slice(0, 10);
 
+const sortGamesByKick = games =>
+  games.slice().sort((a, b) => new Date(a.kick).getTime() - new Date(b.kick).getTime());
+
 /* Groups games by date, returns sorted array of { dateKey, label, games } */
-const groupByDate = (games) => {
+const groupByDate = (games, prioritizeToday = false) => {
   const map = {};
-  games.forEach(g => {
+  sortGamesByKick(games).forEach(g => {
     const key = toDateKey(g.kick);
     if (!map[key]) map[key] = [];
     map[key].push(g);
   });
-  return Object.keys(map).sort().map(dateKey => ({
+  const todayKey = getTodayKey();
+  return Object.keys(map).sort((a, b) => {
+    if (prioritizeToday && a === todayKey) return -1;
+    if (prioritizeToday && b === todayKey) return 1;
+    return a.localeCompare(b);
+  }).map(dateKey => ({
     dateKey,
     label: formatDateLabel(dateKey),
-    games: map[dateKey],
+    games: sortGamesByKick(map[dateKey]),
   }));
 };
 
@@ -322,6 +356,8 @@ const LEAGUES_LABEL = { UCL:"Champions League", EPL:"Premier League", "La Liga":
 /* ── APP ──────────────────────────────────────────────────── */
 export default function App() {
   const router = useRouter();
+  const todayMatchesRef = useRef<HTMLDivElement | null>(null);
+  const hasAutoScrolledToTodayRef = useRef(false);
   const s0 = persist.load();
   const [balance, setBalance]     = useState(s0?.balance ?? 500);
   const [slip, setSlip]           = useState(s0?.slip ?? []);
@@ -337,43 +373,54 @@ export default function App() {
   const [depVal, setDepVal]       = useState("50");
   const [histExp, setHistExp]     = useState(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [tick, setTick]           = useState(0);
 
   // ── REAL-TIME LIVE SCORES ─────────────────────────────────
   const { scoreMap, connected: liveConnected, lastUpdated, liveCount } = useLiveScores();
 
   // Look up live data for a game by home/away team names
-  const getLive = (home: string, away: string): LiveScore | undefined => {
+  const getLive = useCallback((home: string, away: string): LiveScore | undefined => {
     const key = `${home.toLowerCase()}|${away.toLowerCase()}`;
     return scoreMap.get(key);
-  };
+  }, [scoreMap]);
+
+  const resolvedGames = useMemo(() => {
+    const currentTick = tick;
+    return GAMES.map(g => {
+      void currentTick;
+    const liveData = getLive(g.home, g.away);
+    const resolvedStatus = getResolvedStatus(g, liveData);
+    const resolvedScore = getResolvedScore(g, liveData);
+    return {
+      ...g,
+      st: resolvedStatus === "finished" && resolvedScore ? "result" : g.st,
+      score: resolvedScore,
+    };
+    });
+  }, [getLive, tick]);
+
+  const resolvedGameMap = useMemo(() => new Map(resolvedGames.map(g => [g.id, g])), [resolvedGames]);
 
   // Determine if a game can be added to slip (upcoming only)
-  const isGameBettable = (g: any): boolean => {
-    // Already a stored result — never bettable
-    if (g.st === "result") return false;
+  const isGameBettable = useCallback((g: any): boolean => {
     const live = getLive(g.home, g.away);
-    if (live) {
-      const st = getScoreStatus(live);
-      return st === "upcoming";
-    }
-    // Fall back to timestamp logic
-    const now  = Date.now();
-    const kick = new Date(g.kick).getTime();
-    const minsElapsed = (now - kick) / 60000;
-    return kick > now || minsElapsed < 0; // still in the future
-  };
+    return getResolvedStatus(g, live) === "upcoming";
+  }, [getLive]);
 
   useEffect(() => { persist.save({balance, slip, history}); }, [balance, slip, history]);
 
   // ── AUTO-SETTLE: check history against result games, credit balance ──────
   useEffect(() => {
     let changed = false;
+    let balanceCredit = 0;
+    let winsSettled = 0;
+    let lossesSettled = 0;
     const updated = history.map(e => {
       if (e.status === "won" || e.status === "lost") return e; // already settled
       const bets = e.bets.map(b => {
         if (b.result === "won" || b.result === "lost") return b;
-        const g = GAMES.find(x => x.id === b.id);
-        if (!g?.score) return b;
+        const g = resolvedGameMap.get(b.id);
+        if (!g?.score || g.st !== "result") return b;
         const won = didWin(g, b.pick);
         return {...b, result: won ? "won" : "lost", score: g.score};
       });
@@ -385,17 +432,29 @@ export default function App() {
         changed = true;
         if (newStatus === "won") {
           // Credit winnings to balance
-          setBalance(prev => +(prev + e.potReturn).toFixed(2));
-          toast$(`🏆 Bet won! +€${e.potReturn.toFixed(2)} added to balance`, "ok");
+          balanceCredit += e.potReturn;
+          winsSettled++;
+        }
+        if (newStatus === "lost") {
+          lossesSettled++;
         }
       }
-      return {...e, bets, status: newStatus};
+      return {...e, bets, status: newStatus, settlementAmount: newStatus === "won" ? e.potReturn : 0};
     });
-    if (changed) setHistory(updated);
-  }, [history]); // re-run whenever history changes
+    if (changed) {
+      if (balanceCredit > 0) {
+        setBalance(prev => +(prev + balanceCredit).toFixed(2));
+      }
+      setHistory(updated);
+      if (winsSettled > 0) {
+        toast$(`Settled ${winsSettled} winning bet${winsSettled !== 1 ? "s" : ""}. +€${balanceCredit.toFixed(2)} added to balance`, "ok");
+      } else if (lossesSettled > 0) {
+        toast$(`Settled ${lossesSettled} losing bet${lossesSettled !== 1 ? "s" : ""}.`, "err");
+      }
+    }
+  }, [history, scoreMap, tick, resolvedGameMap]); // re-run whenever live or timed state changes
 
   // ── LIVE CLOCK: re-render every 30s while any game could be live ──────────
-  const [, setTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setTick(n => n + 1), 30_000);
     return () => clearInterval(t);
@@ -405,6 +464,19 @@ export default function App() {
     setToast({msg, type});
     setTimeout(() => setToast(null), 2800);
   };
+
+  useEffect(() => {
+    setSlip(prev => {
+      const next = prev.filter(b => {
+        const match = resolvedGameMap.get(b.id);
+        return match ? isGameBettable(match) : false;
+      });
+      if (next.length !== prev.length) {
+        toast$("Removed closed matches from your bet slip", "err");
+      }
+      return next.length === prev.length ? prev : next;
+    });
+  }, [scoreMap, tick, resolvedGameMap, isGameBettable]);
 
   /* ── LOGOUT ──────────────────────────────────────────────── */
   async function handleLogout() {
@@ -450,6 +522,17 @@ export default function App() {
 
   async function placeBets() {
     if (totalStake > balance || totalStake <= 0) { toast$("Insufficient balance", "err"); return; }
+    const invalidIds = slip
+      .filter(b => {
+        const match = resolvedGameMap.get(b.id);
+        return !match || !isGameBettable(match);
+      })
+      .map(b => b.id);
+    if (invalidIds.length > 0) {
+      setSlip(p => p.filter(b => !invalidIds.includes(b.id)));
+      toast$("Some selections closed before placement and were removed", "err");
+      return;
+    }
     setPlacing(true);
     await new Promise(r => setTimeout(r, 1300));
     const entry = {
@@ -475,13 +558,18 @@ export default function App() {
   // settled history
   const settled = history.map(e => {
     const bets = e.bets.map(b => {
-      const g = GAMES.find(x => x.id === b.id);
-      if (!g?.score) return {...b, result:"pending"};
+      const g = resolvedGameMap.get(b.id);
+      if (!g?.score || g.st !== "result") return {...b, result:"pending"};
       return {...b, result: didWin(g, b.pick) ? "won" : "lost", score: g.score};
     });
     const done = bets.every(b => b.result !== "pending");
     const allW = bets.every(b => b.result === "won");
-    return {...e, bets, status: done ? (allW ? "won" : "lost") : "pending"};
+    return {
+      ...e,
+      bets,
+      status: done ? (allW ? "won" : "lost") : "pending",
+      settlementAmount: done && allW ? e.potReturn : 0,
+    };
   });
 
   const wonCount     = settled.filter(e => e.status === "won").length;
@@ -490,9 +578,9 @@ export default function App() {
   const totalWagered = history.reduce((a, e) => a + e.totalStake, 0);
   const totalReturns = settled.filter(e => e.status === "won").reduce((a, e) => a + e.potReturn, 0);
 
-  const upGames  = GAMES.filter(g => g.st === "upcoming" && (cat === "All" || g.cat === cat));
-  const resGames = GAMES.filter(g => g.st === "result"   && (cat === "All" || g.cat === cat));
-  const upcoming = GAMES.filter(g => g.st === "upcoming");
+  const upGames  = resolvedGames.filter(g => g.st !== "result" && (cat === "All" || g.cat === cat));
+  const resGames = resolvedGames.filter(g => g.st === "result" && (cat === "All" || g.cat === cat));
+  const upcoming = resolvedGames.filter(g => g.st !== "result");
 
   const avgConf = upcoming.length ? Math.round(upcoming.reduce((a, g) => a + g.conf, 0) / upcoming.length) : 0;
 
@@ -502,6 +590,17 @@ export default function App() {
 
   // Today's mega picks only
   const todayKey = getTodayKey();
+  const hasTodayMatchGroup = upGrouped.some(group => group.dateKey === todayKey);
+  useEffect(() => {
+    if (page !== "matches") {
+      hasAutoScrolledToTodayRef.current = false;
+      return;
+    }
+    if (!hasTodayMatchGroup || hasAutoScrolledToTodayRef.current || !todayMatchesRef.current) return;
+    todayMatchesRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    hasAutoScrolledToTodayRef.current = true;
+  }, [page, hasTodayMatchGroup]);
+
   const todayMega = MEGA.filter(m => toDateKey(m.kick) === todayKey);
   // If no mega picks today, show the next upcoming date's mega picks
   const nextMegaDateKey = todayMega.length === 0
@@ -976,12 +1075,12 @@ export default function App() {
                 <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
                   <div style={{display:"flex", alignItems:"center", gap:8}}>
                     <div style={{width:4, height:22, borderRadius:2, background:COLORS.blue}}/>
-                    <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:16}}>⭐ TONIGHT'S UCL ACTION</span>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:16}}>⭐ TONIGHT&apos;S UCL ACTION</span>
                   </div>
                   <button className="btn" onClick={() => { setCat("UCL"); setPage("matches"); }} style={{fontSize:11, color:COLORS.blue, fontWeight:700}}>View all →</button>
                 </div>
                 <div style={{display:"flex", flexDirection:"column", gap:8}}>
-                  {GAMES.filter(g => g.st==="upcoming" && g.cat==="UCL" && g.kick.startsWith("2026-04-07")).map(g => (
+                  {resolvedGames.filter(g => g.st!=="result" && g.cat==="UCL" && g.kick.startsWith("2026-04-07")).map(g => (
                     <CompactRow key={g.id} game={g} inSlip={inSlip(g.id)} onAdd={pick => addToSlip(g, pick)} liveData={getLive(g.home, g.away)} />
                   ))}
                 </div>
@@ -994,13 +1093,13 @@ export default function App() {
                     <div style={{width:4, height:22, borderRadius:2, background:COLORS.green}}/>
                     <span style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:16}}>📊 RECENT RESULTS</span>
                     <span style={{fontSize:9, color:COLORS.green, background:COLORS.greenFaint, border:`1px solid ${COLORS.greenBorder}`, borderRadius:5, padding:"2px 8px", fontWeight:800}}>
-                      {GAMES.filter(g=>g.st==="result" && didWin(g,g.pick)).length}/{GAMES.filter(g=>g.st==="result").length} CORRECT
+                      {resolvedGames.filter(g=>g.st==="result" && didWin(g,g.pick)).length}/{resolvedGames.filter(g=>g.st==="result").length} CORRECT
                     </span>
                   </div>
                   <button className="btn" onClick={() => setPage("results")} style={{fontSize:11, color:COLORS.green, fontWeight:700}}>View all →</button>
                 </div>
                 <div style={{display:"flex", flexDirection:"column", gap:8}}>
-                  {GAMES.filter(g => g.st==="result").slice(-5).reverse().map((g, i) => {
+                  {sortGamesByKick(resolvedGames.filter(g => g.st==="result")).slice(-5).reverse().map((g, i) => {
                     const hW = g.score.h > g.score.a;
                     const aW = g.score.a > g.score.h;
                     const dr = g.score.h === g.score.a;
@@ -1067,11 +1166,11 @@ export default function App() {
           {page === "matches" && (
             <>
               <div style={{fontSize:11, color:COLORS.text2, marginBottom:12, fontWeight:500}}>
-                Showing {upGames.length} upcoming {cat!=="All"?(LEAGUES_LABEL[cat]||cat):"all-league"} matches
+                Showing {upGames.length} scheduled and live {cat!=="All"?(LEAGUES_LABEL[cat]||cat):"all-league"} matches
               </div>
               {upGrouped.length === 0 && <EmptyState msg="No upcoming matches for this filter."/>}
               {upGrouped.map(({ dateKey, label, games }) => (
-                <div key={dateKey} style={{marginBottom:24}}>
+                <div key={dateKey} ref={dateKey === todayKey ? todayMatchesRef : null} style={{marginBottom:24}}>
                   {/* Date header */}
                   <div style={{
                     display:"flex", alignItems:"center", gap:10, marginBottom:12
@@ -1107,7 +1206,7 @@ export default function App() {
           {page === "results" && (
             <>
               {(() => {
-                const all = GAMES.filter(g => g.st==="result" && (cat==="All" || g.cat===cat));
+                const all = resolvedGames.filter(g => g.st==="result" && (cat==="All" || g.cat===cat));
                 const wins = all.filter(g => didWin(g, g.pick)).length;
                 const losses = all.length - wins;
                 const rate = all.length ? Math.round(wins/all.length*100) : 0;
@@ -1341,23 +1440,18 @@ function CompactRow({game, inSlip, onAdd, liveData}) {
   const ai  = oddsFor(game, game.pick);
 
   // Derive display state from live API data first, then fall back to kick time
-  const status   = liveData ? getScoreStatus(liveData) : (() => {
-    const now  = Date.now();
-    const kick = new Date(game.kick).getTime();
-    const mins = (now - kick) / 60000;
-    if (kick > now) return "upcoming";
-    if (mins <= 105) return "live";
-    return "finished";
-  })();
+  const status   = getResolvedStatus(game, liveData);
   const isLive     = status === "live" || status === "halftime";
   const isFinished = status === "finished";
   const canAdd     = status === "upcoming";
 
-  const hs = liveData?.homeScore ?? null;
-  const as_ = liveData?.awayScore ?? null;
+  const score = getResolvedScore(game, liveData);
+  const hs = score?.h ?? null;
+  const as_ = score?.a ?? null;
   const hasScore = hs !== null && as_ !== null;
   const minute   = liveData ? formatMinute(liveData) : null;
   const isHT     = liveData?.statusShort === "HT";
+  const countdown = formatLiveCountdown(liveData);
 
   return (
     <div className="card-hover fadeUp" style={{
@@ -1374,7 +1468,7 @@ function CompactRow({game, inSlip, onAdd, liveData}) {
           {isLive && (
             <span className="pulse" style={{color:COLORS.green, fontWeight:800, letterSpacing:"0.07em", display:"flex", alignItems:"center", gap:4}}>
               <span style={{width:5, height:5, borderRadius:"50%", background:COLORS.green, display:"block"}}/>
-              {isHT ? "HALF TIME" : `LIVE ${minute || ""}`}
+              {isHT ? "HALF TIME" : `LIVE ${minute || ""}${countdown ? ` • ${countdown}` : ""}`}
             </span>
           )}
           {isFinished && <span style={{color:COLORS.text2, fontWeight:700}}>FT</span>}
@@ -1447,23 +1541,18 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0})
   const cm = confMeta(game.conf);
 
   // Derive status
-  const status   = liveData ? getScoreStatus(liveData) : (() => {
-    const now  = Date.now();
-    const kick = new Date(game.kick).getTime();
-    const mins = (now - kick) / 60000;
-    if (kick > now) return "upcoming";
-    if (mins <= 105) return "live";
-    return "finished";
-  })();
+  const status   = getResolvedStatus(game, liveData);
   const isLive     = status === "live" || status === "halftime";
   const isHT       = liveData?.statusShort === "HT";
   const isFinished = status === "finished";
   const canAdd     = status === "upcoming";
 
-  const hs    = liveData?.homeScore ?? null;
-  const as_   = liveData?.awayScore ?? null;
+  const score = getResolvedScore(game, liveData);
+  const hs    = score?.h ?? null;
+  const as_   = score?.a ?? null;
   const hasScore  = hs !== null && as_ !== null;
   const minute    = liveData ? formatMinute(liveData) : null;
+  const countdown = formatLiveCountdown(liveData);
   const isDrawing = hasScore && hs === as_;
 
   const cardBorder = isLive ? COLORS.greenBorder : inSlip ? COLORS.greenBorder : COLORS.border;
@@ -1497,7 +1586,7 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0})
                 display:"flex", alignItems:"center", gap:5,
               }}>
                 <span style={{width:5, height:5, borderRadius:"50%", background:COLORS.green, display:"block"}}/>
-                {isHT ? "HALF TIME" : `LIVE ${minute || ""}`}
+                {isHT ? "HALF TIME" : `LIVE ${minute || ""}${countdown ? ` • ${countdown}` : ""}`}
               </span>
             )}
             {isFinished && (
@@ -1584,7 +1673,7 @@ function MatchCard({game, inSlip, expanded, onExpand, onAdd, liveData, delay=0})
               .map((e, i) => (
                 <span key={i} style={{fontSize:10, color:COLORS.text1}}>
                   ⚽ <span style={{fontWeight:700}}>{e.player.split(' ').pop()}</span>{" "}
-                  <span style={{color:COLORS.text2}}>{e.minute}'</span>
+                  <span style={{color:COLORS.text2}}>{e.minute}&apos;</span>
                 </span>
               ))
             }
@@ -1849,6 +1938,7 @@ function HistoryCard({entry, open, onToggle}) {
   const bcol     = isWon ? COLORS.greenBorder : isLost ? "rgba(255,82,82,0.22)" : COLORS.border;
   const pnl      = isWon ? +(entry.potReturn - entry.totalStake).toFixed(2)
                  : isLost ? -entry.totalStake : null;
+  const settlementAmount = isWon ? +(entry.settlementAmount ?? entry.potReturn).toFixed(2) : 0;
   const ref      = `#${String(entry.id).slice(-6).toUpperCase()}`;
   const placedAt = new Date(entry.placedAt);
   const dateStr  = placedAt.toLocaleDateString("en-GB", {day:"numeric", month:"short", year:"numeric"});
@@ -1916,7 +2006,7 @@ function HistoryCard({entry, open, onToggle}) {
                 fontSize:11, fontWeight:800,
                 color: isWon ? COLORS.green : COLORS.red,
               }}>
-                {isWon ? `+€${pnl.toFixed(2)}` : `-€${Math.abs(pnl).toFixed(2)}`}
+                {isWon ? `BAL +€${settlementAmount.toFixed(2)}` : `BAL +€0.00`}
               </div>
             )}
           </div>

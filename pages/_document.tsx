@@ -1,13 +1,17 @@
-// pages/_document.tsx
 import { Html, Head, Main, NextScript } from 'next/document';
+import { siteConfig } from '../lib/site';
 
 export default function Document() {
   return (
     <Html lang="en">
       <Head>
         <meta charSet="utf-8" />
-        <meta name="description" content="BetAI — AI-Powered Football Predictions" />
-        <link rel="icon" href="/favicon.ico" />
+        <meta name="application-name" content={siteConfig.name} />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content={siteConfig.shortName} />
+        <meta name="format-detection" content="telephone=no" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="manifest" href="/site.webmanifest" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
